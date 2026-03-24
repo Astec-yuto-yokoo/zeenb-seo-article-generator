@@ -1,0 +1,239 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { H2Section } from '../types';
+import { generateImage, generatePhotographyPrompt } from '../services/geminiService';
+import { ensure16x9, applyPhotoPostProcessing } from '../services/imageProcessor';
+import { wrapPhotographyPrompt } from '../utils/promptHelper';
+
+interface H2ProcessingCardProps {
+    section: H2Section;
+    updateSection: (section: H2Section) => void;
+    startProcessing: boolean;
+    onProcessingComplete: () => void;
+    availableImages?: Array<{name: string; base64: string}>;  // 利用可能な画像リスト
+}
+
+export const H2ProcessingCard: React.FC<H2ProcessingCardProps> = ({ section, updateSection, startProcessing, onProcessingComplete, availableImages }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    const [editablePrompt, setEditablePrompt] = useState(
+        section.prompt + (section.backgroundInstruction ? `\n- **背景の指定:** ${section.backgroundInstruction}` : '')
+    );
+
+    const handleGenerate = useCallback(async () => {
+        if (!section.baseImage) {
+            updateSection({ ...section, status: 'error', errorMessage: "No base image selected." });
+            onProcessingComplete();
+            return;
+        }
+
+        const isFirstGeneration = section.status === 'pending';
+        updateSection({ ...section, status: 'generating', errorMessage: null, generationStep: 'Starting...' });
+
+        try {
+            let currentPrompt = editablePrompt;
+            let photographyDirection = section.backgroundInstruction || "";
+
+            if (isFirstGeneration) {
+                // Step 1: Gemini テキストモデルで写真撮影指示書を生成
+                updateSection({ ...section, status: 'generating', generationStep: '📸 写真プロンプトを生成中...' });
+                try {
+                    photographyDirection = await generatePhotographyPrompt(section.h2Text, section.paragraphText);
+                    currentPrompt = wrapPhotographyPrompt(photographyDirection);
+                    setEditablePrompt(currentPrompt);
+                } catch (error) {
+                    console.error("Failed to generate photography prompt", error);
+                    // フォールバック: 既存のプロンプトをそのまま使用
+                }
+            }
+
+            // Step 2: 撮影指示書で画像を生成
+            updateSection({
+                ...section,
+                status: 'generating',
+                prompt: currentPrompt,
+                backgroundInstruction: photographyDirection,
+                generationStep: '🎨 画像を生成中...'
+            });
+
+            const generatedImgB64 = await generateImage(section.baseImage, currentPrompt);
+
+            console.log("✅ 画像生成完了 [H2 #" + section.id + "]", {
+                h2Text: section.h2Text,
+                timestamp: new Date().toISOString()
+            });
+
+            // Step 3: 後処理（グレイン・ビネット・色補正）
+            updateSection({ ...section, status: 'generating', generationStep: '🎞️ 写真フィルタを適用中...' });
+            const postProcessed = await applyPhotoPostProcessing(generatedImgB64);
+
+            // Step 4: 16:9 クロップ
+            updateSection({ ...section, status: 'generating', generationStep: '📐 16:9にリサイズ中...' });
+            const finalImage = await ensure16x9(postProcessed, 1920, 1080);
+
+            const simulatedMediaId = Math.floor(Math.random() * 1000) + 1;
+            const simulatedUrl = "https://your-site.com/wp-content/uploads/2024/h2_" + section.id + ".jpg";
+
+            updateSection({
+                ...section,
+                prompt: currentPrompt,
+                backgroundInstruction: photographyDirection,
+                status: 'success',
+                generatedImage: finalImage,
+                mediaId: simulatedMediaId,
+                sourceUrl: simulatedUrl,
+                generationStep: null,
+                errorMessage: null,
+            });
+
+        } catch (error: any) {
+            // エラーログの詳細出力
+            console.error('❌ 画像生成エラー発生:');
+            console.error('  - H2タイトル:', section.h2Text);
+            console.error('  - セクションID:', section.id);
+            console.error('  - エラーメッセージ:', error?.message || 'Unknown error');
+            console.error('  - エラータイプ:', error?.name || 'UnknownError');
+            console.error('  - ステータスコード:', error?.status || error?.response?.status || 'Unknown');
+            console.error('  - 現在のプロンプト長:', editablePrompt?.length || 0);
+            console.error('  - ベース画像名:', section.baseImageName);
+            console.error('  - タイムスタンプ:', new Date().toISOString());
+            console.error('  - 完全なエラー:', error);
+
+            // 500エラーの場合の追加情報
+            if (error?.status === 500 || error?.response?.status === 500) {
+                console.error('🔍 500エラー追加診断:');
+                console.error('  - このセクションでの生成試行回数を確認してください');
+                console.error('  - プロンプトに特殊文字が含まれている可能性があります');
+                console.error('  - Gemini APIのレート制限に達している可能性があります');
+                console.error('  - 数秒待ってから再試行することを推奨します');
+            }
+
+            const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+            updateSection({ ...section, status: 'error', errorMessage, prompt: editablePrompt, generationStep: null });
+        } finally {
+            if (isFirstGeneration) {
+                onProcessingComplete();
+            }
+        }
+    }, [section, updateSection, onProcessingComplete, editablePrompt]);
+
+    useEffect(() => {
+        if (startProcessing && section.status === 'pending') {
+            handleGenerate();
+        }
+    }, [startProcessing, section.status, handleGenerate]);
+
+
+    const getStatusColor = () => {
+        switch (section.status) {
+            case 'pending': return 'bg-gray-200 text-gray-700';
+            case 'generating': return 'bg-blue-200 text-blue-800 animate-pulse';
+            case 'success': return 'bg-green-200 text-green-800';
+            case 'error': return 'bg-red-200 text-red-800';
+        }
+    };
+    
+    const isGenerated = section.status === 'success' || section.status === 'error';
+    const buttonText = section.status === 'generating' ? 'Generating...' : isGenerated ? 'Regenerate Image' : 'Generate Image';
+
+
+    return (
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="p-4 flex items-center justify-between cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+                <div className="flex-1">
+                    <div className="flex items-center">
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor()}`}>{section.status}</span>
+                        <h3 className="ml-3 text-lg font-semibold text-gray-800">{section.h2Text}</h3>
+                    </div>
+                </div>
+                <button
+                    className="text-indigo-600 hover:text-indigo-800"
+                >
+                    {isExpanded ? 'Collapse' : 'Expand'}
+                </button>
+            </div>
+            {isExpanded && (
+                <div className="p-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h4 className="font-semibold text-gray-700 mb-2">Details</h4>
+                        <div className="text-sm space-y-3">
+                            <div>
+                                <p className="font-medium text-gray-600 mb-1">Base Image:</p>
+                                {availableImages && availableImages.length > 0 ? (
+                                    <select
+                                        value={section.baseImageName}
+                                        onChange={(e) => {
+                                            const selectedImage = availableImages.find(img => img.name === e.target.value);
+                                            if (selectedImage) {
+                                                updateSection({
+                                                    ...section,
+                                                    baseImageName: selectedImage.name,
+                                                    baseImage: selectedImage.base64,
+                                                    status: 'pending'  // 画像を変更したら状態をリセット
+                                                });
+                                                console.log(`🔄 "${section.h2Text}" のベース画像を "${selectedImage.name}" に変更しました`);
+                                            }
+                                        }}
+                                        className="w-full p-2 border border-gray-300 rounded-md bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    >
+                                        {availableImages.map(img => (
+                                            <option key={img.name} value={img.name}>
+                                                {img.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <span className="text-gray-700">{section.baseImageName || 'N/A'}</span>
+                                )}
+                            </div>
+                            <div>
+                                <p className="font-medium text-gray-600">📸 Photography Direction:</p>
+                                <div className="mt-1 p-2 bg-gray-50 rounded-md min-h-[40px] flex items-center">
+                                    {section.status === 'pending' && <span className="text-gray-400 italic">Will be generated automatically...</span>}
+                                    {section.status === 'generating' && !section.backgroundInstruction && <span className="text-blue-600 animate-pulse">Generating photography direction...</span>}
+                                    {section.backgroundInstruction && <span className="text-gray-800 text-xs leading-relaxed">{section.backgroundInstruction}</span>}
+                                    {section.status === 'error' && !section.backgroundInstruction && <span className="text-red-500">Could not generate direction.</span>}
+                                </div>
+                            </div>
+                             <div className="bg-gray-50 p-3 rounded-md">
+                                <label htmlFor={`prompt-${section.id}`} className="font-semibold text-gray-600">Editable Prompt:</label>
+                                <textarea
+                                    id={`prompt-${section.id}`}
+                                    value={editablePrompt}
+                                    onChange={(e) => setEditablePrompt(e.target.value)}
+                                    className="mt-1 block w-full h-48 p-2 text-xs font-mono text-gray-800 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                    aria-label="Editable prompt"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex flex-col items-center justify-center">
+                        <div className="w-full aspect-video bg-gray-100 rounded-md flex items-center justify-center overflow-hidden">
+                        {section.status === 'success' && section.generatedImage && (
+                            <img src={section.generatedImage} alt="Generated" className="w-full h-full object-cover" />
+                        )}
+                        {section.status === 'generating' && (
+                            <div className="text-center text-gray-500 p-4">
+                                <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
+                                <p className="mt-2 font-semibold">Generating Image...</p>
+                                {section.generationStep && <p className="mt-1 text-sm text-indigo-600">{section.generationStep}</p>}
+                            </div>
+                        )}
+                        {section.status === 'error' && (
+                            <div className="text-red-500 p-4">{section.errorMessage}</div>
+                        )}
+                        {section.status === 'pending' && section.baseImage && (
+                           <img src={section.baseImage} alt="Base" className="w-full h-full object-cover opacity-50" />
+                        )}
+                        </div>
+                        <button
+                            onClick={handleGenerate}
+                            disabled={section.status === 'generating'}
+                            className="mt-4 px-4 py-2 bg-indigo-500 text-white text-sm font-semibold rounded-md hover:bg-indigo-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                        >
+                            {buttonText}
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};

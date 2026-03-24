@@ -1,0 +1,35 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - "docker build --build-arg VITE_GEMINI_API_KEY=$$GEMINI_API_KEY --build-arg VITE_BACKEND_URL=$$BACKEND_URL --build-arg VITE_INTERNAL_API_KEY=$$INTERNAL_API_KEY --build-arg VITE_IMAGE_GEN_URL=$$IMAGE_GEN_URL --build-arg VITE_OPENAI_API_KEY=$$OPENAI_API_KEY --build-arg VITE_SLACK_WEBHOOK_URL=$$SLACK_WEBHOOK_URL --build-arg VITE_ENABLE_SLACK_NOTIFICATIONS=true --build-arg VITE_SUPABASE_URL=$$SUPABASE_URL --build-arg VITE_SUPABASE_ANON_KEY=$$SUPABASE_ANON_KEY -t asia-northeast1-docker.pkg.dev/$PROJECT_ID/seo-app/seo-frontend:latest ."
+    secretEnv:
+      - GEMINI_API_KEY
+      - BACKEND_URL
+      - INTERNAL_API_KEY
+      - IMAGE_GEN_URL
+      - OPENAI_API_KEY
+      - SLACK_WEBHOOK_URL
+      - SUPABASE_URL
+      - SUPABASE_ANON_KEY
+images:
+  - asia-northeast1-docker.pkg.dev/$PROJECT_ID/seo-app/seo-frontend:latest
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/GEMINI_API_KEY/versions/latest
+      env: GEMINI_API_KEY
+    - versionName: projects/$PROJECT_ID/secrets/BACKEND_URL/versions/latest
+      env: BACKEND_URL
+    - versionName: projects/$PROJECT_ID/secrets/INTERNAL_API_KEY/versions/latest
+      env: INTERNAL_API_KEY
+    - versionName: projects/$PROJECT_ID/secrets/IMAGE_GEN_URL/versions/latest
+      env: IMAGE_GEN_URL
+    - versionName: projects/$PROJECT_ID/secrets/OPENAI_API_KEY/versions/latest
+      env: OPENAI_API_KEY
+    - versionName: projects/$PROJECT_ID/secrets/SLACK_WEBHOOK_URL/versions/latest
+      env: SLACK_WEBHOOK_URL
+    - versionName: projects/$PROJECT_ID/secrets/SUPABASE_URL/versions/latest
+      env: SUPABASE_URL
+    - versionName: projects/$PROJECT_ID/secrets/SUPABASE_ANON_KEY/versions/latest
+      env: SUPABASE_ANON_KEY

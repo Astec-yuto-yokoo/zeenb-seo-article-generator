@@ -1,0 +1,5 @@
+{
+  "name": "Copy of Ver.4)AI Article Imager for WordPress",
+  "description": "An intelligent tool that automatically parses an HTML article, generates context-aware images for each H2 heading using AI, and prepares the content for direct posting to WordPress.",
+  "requestFramePermissions": []
+}

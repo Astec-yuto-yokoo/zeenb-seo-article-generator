@@ -1,0 +1,63 @@
+#!/bin/bash
+
+# GCP Cloud Runデプロイスクリプト
+set -e
+
+# 色付きログ用の関数
+log_info() {
+    echo -e "\033[1;34m[INFO]\033[0m $1"
+}
+
+log_success() {
+    echo -e "\033[1;32m[SUCCESS]\033[0m $1"
+}
+
+log_error() {
+    echo -e "\033[1;31m[ERROR]\033[0m $1"
+}
+
+# プロジェクトIDの確認
+PROJECT_ID=$(gcloud config get-value project)
+if [ -z "$PROJECT_ID" ]; then
+    log_error "GCPプロジェクトが設定されていません"
+    echo "以下のコマンドでプロジェクトを設定してください："
+    echo "gcloud config set project YOUR_PROJECT_ID"
+    exit 1
+fi
+
+log_info "プロジェクトID: $PROJECT_ID"
+
+# 必要なAPIの有効化（エラーが出る場合はスキップ）
+log_info "必要なAPIを有効化中..."
+gcloud services enable cloudbuild.googleapis.com || log_info "cloudbuild API有効化をスキップ"
+gcloud services enable run.googleapis.com || log_info "run API有効化をスキップ"
+gcloud services enable containerregistry.googleapis.com || log_info "containerregistry API有効化をスキップ"
+
+# Dockerイメージをビルド（キャッシュなし）
+log_info "Dockerイメージをビルド中..."
+docker build --no-cache -t gcr.io/$PROJECT_ID/scraping-server-full:latest .
+
+# Container Registryにプッシュ
+log_info "Container Registryにプッシュ中..."
+docker push gcr.io/$PROJECT_ID/scraping-server-full:latest
+
+# Cloud Runにデプロイ
+log_info "Cloud Runにデプロイ中..."
+gcloud run deploy scraping-server-full \
+    --image gcr.io/$PROJECT_ID/scraping-server-full:latest \
+    --region asia-northeast1 \
+    --platform managed \
+    --allow-unauthenticated \
+    --memory 4Gi \
+    --cpu 2 \
+    --timeout 900 \
+    --concurrency 80 \
+    --max-instances 20 \
+    --port 8080 \
+    --set-env-vars "NODE_ENV=production,PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true,PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable"
+
+# デプロイ完了
+SERVICE_URL=$(gcloud run services describe scraping-server-full --region=asia-northeast1 --format="value(status.url)")
+log_success "デプロイ完了！"
+log_success "サービスURL: $SERVICE_URL"
+log_info "ヘルスチェック: $SERVICE_URL/api/health"

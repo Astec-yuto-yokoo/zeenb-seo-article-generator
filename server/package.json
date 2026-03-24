@@ -1,0 +1,39 @@
+{
+  "name": "scraping-server",
+  "version": "1.0.0",
+  "description": "Web scraping + utility API server (Puppeteer/Google APIs)",
+  "main": "scraping-server.js",
+  "scripts": {
+    "start": "node scraping-server.js",
+    "dev": "nodemon scraping-server.js",
+    "start:full": "node scraping-server-full.js",
+    "dev:full": "nodemon scraping-server-full.js"
+  },
+  "dependencies": {
+    "@sparticuz/chromium": "^126.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.1",
+    "form-data": "^4.0.0",
+    "googleapis": "^166.0.0",
+    "helmet": "^7.2.0",
+    "multer": "^2.1.1",
+    "node-fetch": "^2.7.0",
+    "pdf-parse": "^2.4.5",
+    "puppeteer": "^21.11.0",
+    "puppeteer-core": "^21.11.0",
+    "uuid": "^13.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "scraping",
+    "puppeteer",
+    "express",
+    "cloud-run"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}

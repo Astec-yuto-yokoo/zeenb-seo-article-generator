@@ -1,0 +1,25 @@
+# Cloud Build用の除外ファイル
+# node_modulesはDockerビルド内でインストールされるため除外
+
+node_modules/
+npm-debug.log
+.git
+.gitignore
+README.md
+.env
+.env.*
+.nyc_output/
+coverage/
+
+# ローカル開発用ファイル
+*.local
+.DS_Store
+Thumbs.db
+
+# テスト用ファイル
+test-*.cjs
+test-*.js
+*.test.js
+
+# ドキュメント
+*.md

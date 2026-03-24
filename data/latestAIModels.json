@@ -1,0 +1,284 @@
+{
+  "metadata": {
+    "lastUpdated": "2025-12-06",
+    "version": "1.0.1",
+    "description": "最新AIモデル情報を管理するマスターファイル"
+  },
+  "currentDate": {
+    "year": 2025,
+    "month": 12,
+    "displayText": "2025年12月"
+  },
+  "categories": {
+    "llm": {
+      "displayName": "大規模言語モデル",
+      "latest": [
+        {
+          "company": "OpenAI",
+          "model": "GPT-5.1",
+          "variants": ["GPT-5.1 Thinking", "GPT-5.1 Instant"],
+          "releaseDate": "2025年11月",
+          "replaces": ["GPT-5", "GPT-4.1", "GPT-4o", "GPT-4 Turbo", "GPT-3.5"]
+        },
+        {
+          "company": "Google",
+          "model": "Gemini 3 Pro",
+          "variants": ["Gemini 3 Pro", "gemini-3-pro-preview"],
+          "releaseDate": "2025年11月",
+          "replaces": [
+            "Gemini 2.5 Pro",
+            "Gemini 2.5 Flash",
+            "Gemini 1.5 Pro",
+            "Gemini Pro",
+            "Bard"
+          ]
+        },
+        {
+          "company": "Anthropic",
+          "model": "Claude Opus 4.5",
+          "variants": ["Claude Opus 4.5"],
+          "releaseDate": "2025年11月",
+          "replaces": [
+            "Claude Opus 4.1",
+            "Claude 3.5 Sonnet",
+            "Claude 3 Opus",
+            "Claude 2",
+            "Claude 1"
+          ]
+        }
+      ]
+    },
+    "reasoning": {
+      "displayName": "推論特化モデル",
+      "latest": [
+        {
+          "company": "OpenAI",
+          "model": "GPT-5.1 Thinking",
+          "variants": ["GPT-5.1 Thinking", "GPT-5.1 Instant（短時間推論向け）"],
+          "releaseDate": "2025年11月",
+          "replaces": ["GPT-5 Thinking", "o1", "o3", "o1-preview", "o1-mini"]
+        },
+        {
+          "company": "Google",
+          "model": "Gemini 3 Deep Think",
+          "variants": ["Gemini 3 Deep Think"],
+          "releaseDate": "2025年11月",
+          "replaces": ["Gemini 2.5 Pro（Deep Research）", "Gemini 1.5 Pro"]
+        },
+        {
+          "company": "Anthropic",
+          "model": "Claude Opus 4.5",
+          "variants": ["Claude Opus 4.5（長時間推論・エージェント利用を含む）"],
+          "releaseDate": "2025年11月",
+          "replaces": ["Claude Opus 4.1"]
+        }
+      ]
+    },
+    "imageGeneration": {
+      "displayName": "画像生成AI",
+      "latest": [
+        {
+          "company": "Google",
+          "model": "Nano Banana Pro（Gemini 3 Pro Image）",
+          "variants": ["Nano Banana Pro", "gemini-3-pro-image-preview"],
+          "releaseDate": "2025年11月",
+          "replaces": ["Gemini 2.5 Flash Image", "Imagen 2", "Imagen"]
+        },
+        {
+          "company": "OpenAI",
+          "model": "DALL-E 3",
+          "variants": ["DALL-E 3"],
+          "releaseDate": "2023年10月",
+          "replaces": ["DALL-E 2", "DALL-E"]
+        },
+        {
+          "company": "Stability AI",
+          "model": "Stable Diffusion 3.5",
+          "variants": [
+            "Stable Diffusion 3.5 Large",
+            "Stable Diffusion 3.5 Large Turbo",
+            "Stable Diffusion 3.5 Medium"
+          ],
+          "releaseDate": "2024年10月",
+          "replaces": [
+            "Stable Diffusion 3",
+            "Stable Diffusion XL",
+            "Stable Diffusion 2.1",
+            "Stable Diffusion 1.5"
+          ]
+        },
+        {
+          "company": "Midjourney",
+          "model": "Midjourney V7",
+          "variants": ["Midjourney V7"],
+          "releaseDate": "2025年4月",
+          "replaces": [
+            "Midjourney v6",
+            "Midjourney v5.2",
+            "Midjourney v5.1",
+            "Midjourney v5",
+            "Midjourney v4"
+          ]
+        }
+      ]
+    },
+    "videoGeneration": {
+      "displayName": "動画生成AI",
+      "latest": [
+        {
+          "company": "OpenAI",
+          "model": "Sora 2",
+          "variants": ["Sora 2", "Sora 2 Pro"],
+          "releaseDate": "2025年9月",
+          "replaces": ["Sora", "Sora 1 Turbo"]
+        },
+        {
+          "company": "Google",
+          "model": "Veo 3",
+          "variants": ["Veo 3"],
+          "releaseDate": "2025年（詳細は公式ドキュメント参照）",
+          "replaces": ["Veo 2", "Veo", "Imagen Video"]
+        },
+        {
+          "company": "Runway",
+          "model": "Gen-3 / Gen-4 系列（最新版）",
+          "variants": ["Runway Gen-4", "Runway Gen-3"],
+          "releaseDate": "2024〜2025年",
+          "replaces": ["Runway Gen-2", "Runway Gen-1"]
+        },
+        {
+          "company": "Pika Labs",
+          "model": "Pika 2 系列（最新版）",
+          "variants": ["Pika 2.x"],
+          "releaseDate": "2025年",
+          "replaces": ["Pika 1.0"]
+        }
+      ]
+    },
+    "voice": {
+      "displayName": "音声AI",
+      "latest": [
+        {
+          "company": "OpenAI",
+          "model": "GPT-4o 音声対応ファミリー",
+          "variants": [
+            "音声入出力対応 GPT-4o 系モデル（公式ドキュメント準拠）"
+          ],
+          "releaseDate": "2024〜2025年",
+          "replaces": ["Whisper", "Whisper v2", "Whisper v3"]
+        },
+        {
+          "company": "ElevenLabs",
+          "model": "ElevenLabs v3",
+          "variants": ["ElevenLabs v3 Turbo", "ElevenLabs v3 Multilingual"],
+          "releaseDate": "2025年5月",
+          "replaces": ["ElevenLabs v2", "ElevenLabs v1"]
+        }
+      ]
+    },
+    "multimodal": {
+      "displayName": "マルチモーダルAI",
+      "latest": [
+        {
+          "company": "OpenAI",
+          "model": "GPT-5.1（マルチモーダル）",
+          "variants": [
+            "GPT-5.1 Thinking（テキスト＋画像＋音声＋ツール）",
+            "GPT-5.1 Instant（軽量マルチモーダル）"
+          ],
+          "releaseDate": "2025年11月",
+          "replaces": ["GPT-5（マルチモーダル）", "GPT-4.1", "GPT-4o", "GPT-4V"]
+        },
+        {
+          "company": "Google",
+          "model": "Gemini 3 Pro（マルチモーダル）",
+          "variants": [
+            "Gemini 3 Pro",
+            "gemini-3-pro-preview",
+            "Nano Banana Pro（画像生成機能）"
+          ],
+          "releaseDate": "2025年11月",
+          "replaces": [
+            "Gemini 2.5 Pro Vision",
+            "Gemini 1.5 Pro Vision",
+            "Gemini Pro Vision"
+          ]
+        },
+        {
+          "company": "Anthropic",
+          "model": "Claude Opus 4.5",
+          "variants": ["Claude Opus 4.5（テキスト中心・エージェント向け）"],
+          "releaseDate": "2025年11月",
+          "replaces": ["Claude Opus 4.1", "Claude 3.5 Sonnet", "Claude 3 Opus"]
+        }
+      ]
+    }
+  },
+  "deprecatedTerms": {
+    "doNotUse": [
+      "GPT-4",
+      "GPT-4o",
+      "GPT-4 Turbo",
+      "GPT-4.1",
+      "GPT-3.5",
+      "GPT-5",
+      "Claude 3.5 Sonnet",
+      "Claude 3",
+      "Claude Opus 4.1",
+      "Gemini 1.5 Pro",
+      "Gemini 2.0 Flash",
+      "Gemini 2.5 Pro",
+      "Gemini 2.5 Flash",
+      "Bard",
+      "DALL-E 2",
+      "Midjourney v5",
+      "Midjourney v6",
+      "Stable Diffusion 2.1",
+      "Stable Diffusion 3",
+      "o1",
+      "o3",
+      "o1-preview",
+      "Whisper",
+      "Whisper v2",
+      "Whisper v3",
+      "Veo 2",
+      "Veo 3",
+      "Runway Gen-2",
+      "Pika 1.0"
+    ],
+    "reason": "これらは2025年12月時点では一世代以上古いモデルです。新規設計では原則として最新版の利用を推奨し、既存システムでは互換性を確認した上で段階的な移行を検討してください。"
+  },
+  "replacementRules": {
+    "GPT-4": "GPT-5.1",
+    "GPT-4o": "GPT-5.1",
+    "GPT-4 Turbo": "GPT-5.1",
+    "GPT-4.1": "GPT-5.1",
+    "GPT-3.5": "GPT-5.1",
+    "GPT-5": "GPT-5.1",
+    "Claude 3.5 Sonnet": "Claude Opus 4.5",
+    "Claude 3 Opus": "Claude Opus 4.5",
+    "Claude 3": "Claude Opus 4.5",
+    "Claude Opus 4.1": "Claude Opus 4.5",
+    "Gemini 1.5 Pro": "Gemini 3 Pro",
+    "Gemini 2.0 Flash": "Nano Banana Pro（Gemini 3 Pro Image）",
+    "Gemini 2.5 Pro": "Gemini 3 Pro",
+    "Gemini 2.5 Flash": "Gemini 3 Pro",
+    "Gemini Pro": "Gemini 3 Pro",
+    "Bard": "Gemini 3 Pro",
+    "o1": "GPT-5.1 Thinking",
+    "o3": "GPT-5.1 Thinking",
+    "o1-preview": "GPT-5.1 Thinking",
+    "DALL-E 2": "DALL-E 3",
+    "Midjourney v5": "Midjourney V7",
+    "Midjourney v6": "Midjourney V7",
+    "Stable Diffusion 2.1": "Stable Diffusion 3.5",
+    "Stable Diffusion 3": "Stable Diffusion 3.5",
+    "Veo 2": "Veo 3",
+    "Veo": "Veo 3",
+    "Runway Gen-2": "Runway Gen-3",
+    "Pika 1.0": "Pika 2.x",
+    "Whisper": "GPT-4o 音声対応ファミリー",
+    "Whisper v2": "GPT-4o 音声対応ファミリー",
+    "Whisper v3": "GPT-4o 音声対応ファミリー"
+  }
+}

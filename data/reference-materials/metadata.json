@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "materials": [
+    {
+      "id": "d7558c99-0951-4dfe-a3a0-73bd9af34f60",
+      "originalFileName": "マイカラーパンフ.pdf",
+      "fileType": "pdf",
+      "fileSize": 5985451,
+      "title": "マイカラーパンフ.pdf",
+      "description": "",
+      "tags": [],
+      "uploadedAt": "2026-03-13T06:53:49.699Z",
+      "extractedTextLength": 2664,
+      "status": "ready"
+    },
+    {
+      "id": "f75cfcf7-6d3d-46eb-ace5-c1e28e410659",
+      "originalFileName": "02_情報誌形式パンフ.pdf",
+      "fileType": "pdf",
+      "fileSize": 17837979,
+      "title": "02_情報誌形式パンフ.pdf",
+      "description": "",
+      "tags": [],
+      "uploadedAt": "2026-03-13T07:55:30.449Z",
+      "extractedTextLength": 7088,
+      "status": "ready"
+    },
+    {
+      "id": "fa57defa-d7d7-4fe2-87bd-0ad317330f5f",
+      "originalFileName": "マンション診断書サンプル.pdf",
+      "fileType": "pdf",
+      "fileSize": 4076310,
+      "title": "マンション診断書サンプル.pdf",
+      "description": "",
+      "tags": [],
+      "uploadedAt": "2026-03-13T08:19:21.642Z",
+      "extractedTextLength": 12488,
+      "status": "ready"
+    },
+    {
+      "id": "ba65dfb4-121a-4f6a-a003-deeca86ec07d",
+      "originalFileName": "賃料査定サンプル.pdf",
+      "fileType": "pdf",
+      "fileSize": 14945895,
+      "title": "賃料査定サンプル.pdf",
+      "description": "",
+      "tags": [],
+      "uploadedAt": "2026-03-13T09:27:56.560Z",
+      "extractedTextLength": 17401,
+      "status": "ready"
+    }
+  ]
+}

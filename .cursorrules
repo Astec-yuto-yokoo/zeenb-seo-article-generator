@@ -1,0 +1,13 @@
+# seo-content-generator-for-distribution ルール
+
+## Planモードの保存（必須）
+- Planモードでプランを提示したら、その直後に**同内容**を必ず `docs/plans/` に Markdown で保存すること。
+- ファイル名は `docs/plans/YYYY-MM-DD_HH-mm_<short-title>.md`。
+  - `<short-title>` は英小文字/数字/ハイフンのみで短く（例: `plan-image-pipeline`）。日本語タイトルは英語 or ローマ字にする。
+- `docs/plans/` が存在しない場合は作成してから保存すること。
+- 保存後は、**作成/更新したファイルパス**を必ず返信に含めること。
+
+## 更新ポリシー
+- 原則は「新規プラン = 新規ファイル」。
+- ユーザーが「追記/更新」と明示した場合のみ、該当ファイルを更新する（更新した場合もパスを返す）。
+

@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: seo-content-generator-backend
+    env: node
+    region: oregon
+    plan: starter
+    buildCommand: |
+      npm install && 
+      cd server && 
+      npm install && 
+      echo "Installing Puppeteer Chrome..." && 
+      npx puppeteer browsers install chrome && 
+      echo "Chrome installation completed"
+    startCommand: cd server && node scraping-server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PUPPETEER_CACHE_DIR
+        value: /opt/render/.cache/puppeteer
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: "false"
