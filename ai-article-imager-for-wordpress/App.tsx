@@ -69,7 +69,7 @@ const App: React.FC<AppProps> = ({ initialArticleData }) => {
     const fetchWpConfig = async () => {
       try {
         const apiUrl =
-          import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+          import.meta.env.VITE_API_URL || "http://localhost:3003/api";
         const apiKey = import.meta.env.VITE_INTERNAL_API_KEY || "";
         const response = await fetch(`${apiUrl}/wordpress/config`, {
           headers: {
@@ -171,12 +171,10 @@ const App: React.FC<AppProps> = ({ initialArticleData }) => {
     const handleMessage = (event: MessageEvent) => {
       // セキュリティ: 許可されたオリジンからのメッセージのみ受信
       const ALLOWED_ORIGINS = [
-        "http://localhost:5178", // 現行開発環境
-        "http://localhost:5176", // レガシー（互換性）
-        "http://localhost:5177", // 画像生成エージェント
-        "http://127.0.0.1:5176", // 127.0.0.1でアクセスした場合
-        "http://127.0.0.1:5177", // 127.0.0.1でアクセスした場合
-        "http://127.0.0.1:5178", // 127.0.0.1でアクセスした場合
+        "http://localhost:5180", // zeenb メインアプリ
+        "http://localhost:5181", // zeenb 画像生成エージェント
+        "http://127.0.0.1:5180",
+        "http://127.0.0.1:5181",
         import.meta.env.VITE_MAIN_APP_URL, // 本番用（.envで設定）
       ].filter(Boolean); // undefined を除外
 
@@ -324,12 +322,10 @@ const App: React.FC<AppProps> = ({ initialArticleData }) => {
     const handleMessage = (event: MessageEvent) => {
       // セキュリティ: 許可されたオリジンからのメッセージのみ受信
       const ALLOWED_ORIGINS = [
-        "http://localhost:5178", // 現行開発環境
-        "http://localhost:5176", // レガシー（互換性）
-        "http://localhost:5177", // 画像生成エージェント
-        "http://127.0.0.1:5176", // 127.0.0.1でアクセスした場合
-        "http://127.0.0.1:5177", // 127.0.0.1でアクセスした場合
-        "http://127.0.0.1:5178", // 127.0.0.1でアクセスした場合
+        "http://localhost:5180", // zeenb メインアプリ
+        "http://localhost:5181", // zeenb 画像生成エージェント
+        "http://127.0.0.1:5180",
+        "http://127.0.0.1:5181",
         import.meta.env.VITE_MAIN_APP_URL, // 本番用（.envで設定）
       ].filter(Boolean); // undefined を除外
 

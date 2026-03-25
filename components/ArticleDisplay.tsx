@@ -109,7 +109,7 @@ ${article.plainText}`;
       // フォールバック: 別タブで開く
       const imageGenUrl =
         import.meta.env.VITE_IMAGE_GEN_URL ||
-        "http://localhost:5177";
+        "http://localhost:5181";
       const imageGenOrigin = new URL(imageGenUrl).origin;
 
       console.log(`🚀 AI Article Imager for WordPressを開きます: ${imageGenUrl}`);

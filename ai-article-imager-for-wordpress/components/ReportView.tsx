@@ -63,7 +63,7 @@ export const ReportView: React.FC<ReportViewProps> = ({
       classicHtml = classicHtml.replace(
         /<!-- wp:image[^>]*-->[\s\S]*?<img([^>]*)src="([^"]*)"([^>]*)alt="([^"]*)"([^>]*)class="wp-image-(\d+)"([^>]*)\/?>[\s\S]*?<!-- \/wp:image -->/gi,
         (match, attrs1, src, attrs2, alt, attrs3, imageId, attrs4) => {
-          return `<img src="${src}" alt="${alt}" class="alignnone size-full wp-image-${imageId}" />`;
+          return `<figure style="margin-bottom:1.5em;"><img src="${src}" alt="${alt}" class="alignnone size-full wp-image-${imageId}" style="width:450px;" /></figure>`;
         }
       );
 
@@ -296,9 +296,9 @@ export const ReportView: React.FC<ReportViewProps> = ({
         if (matchedH2 && uploadedData) {
           // 画像は常にブロックエディタ形式で挿入（後で必要に応じて変換）
           const imageBlock = `
-                      <!-- wp:image {"id":${uploadedData.mediaId},"sizeSlug":"full","linkDestination":"none"} -->
-                      <figure class="wp-block-image size-full">
-                        <img src="${uploadedData.sourceUrl}" alt="${section.altText}" class="wp-image-${uploadedData.mediaId}" />
+                      <!-- wp:image {"id":${uploadedData.mediaId},"width":"450px","sizeSlug":"full","linkDestination":"none"} -->
+                      <figure class="wp-block-image size-full is-resized" style="margin-bottom:1.5em;">
+                        <img src="${uploadedData.sourceUrl}" alt="${section.altText}" class="wp-image-${uploadedData.mediaId}" style="width:450px;" />
                       </figure>
                       <!-- /wp:image -->
                     `;
@@ -381,7 +381,7 @@ export const ReportView: React.FC<ReportViewProps> = ({
             console.log(`  - G列（メタディスクリプション）: "${articleMetaDescription.substring(0, 50)}..."`);
           }
           const apiUrl =
-            import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+            import.meta.env.VITE_API_URL || "http://localhost:3003/api";
           const response = await fetch(`${apiUrl}/spreadsheet-mode/update`, {
             method: "POST",
             headers: {
@@ -403,7 +403,7 @@ export const ReportView: React.FC<ReportViewProps> = ({
             // 親ウィンドウに完了通知を送信（次のキーワード処理トリガー）
             // iframe内の場合はwindow.parent、別タブの場合はwindow.openerを使用
             const parentOrigin =
-              import.meta.env.VITE_MAIN_APP_URL || "http://localhost:5176";
+              import.meta.env.VITE_MAIN_APP_URL || "http://localhost:5180";
 
             // 親ウィンドウを取得（iframe対応）
             const parentWindow = window.parent !== window ? window.parent : window.opener;

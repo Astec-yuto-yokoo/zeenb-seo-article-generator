@@ -7,24 +7,24 @@ echo "🚀 SEO Content Generator を起動します..."
 
 # 既存のプロセスを確認
 echo "📍 既存のプロセスを確認中..."
-lsof -i :5178 > /dev/null 2>&1
+lsof -i :5180 > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo "⚠️  ポート5178が使用中です。既存のプロセスを終了します..."
-    kill $(lsof -t -i:5178) 2>/dev/null
+    echo "⚠️  ポート5180が使用中です。既存のプロセスを終了します..."
+    kill $(lsof -t -i:5180) 2>/dev/null
     sleep 2
 fi
 
-lsof -i :3002 > /dev/null 2>&1
+lsof -i :3003 > /dev/null 2>&1
 if [ $? -eq 0 ]; then
     echo "⚠️  ポート3001が使用中です。既存のプロセスを終了します..."
-    kill $(lsof -t -i:3002) 2>/dev/null
+    kill $(lsof -t -i:3003) 2>/dev/null
     sleep 2
 fi
 
-lsof -i :5179 > /dev/null 2>&1
+lsof -i :5181 > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo "⚠️  ポート5179が使用中です。既存のプロセスを終了します..."
-    kill $(lsof -t -i:5179) 2>/dev/null
+    echo "⚠️  ポート5181が使用中です。既存のプロセスを終了します..."
+    kill $(lsof -t -i:5181) 2>/dev/null
     sleep 2
 fi
 
@@ -48,9 +48,9 @@ cd ..
 # 起動完了メッセージ
 echo ""
 echo "✅ 起動完了！"
-echo "📍 メインアプリ: http://localhost:5178"
-echo "📍 スクレイピングサーバー: http://localhost:3002"
-echo "📍 画像生成エージェント: http://localhost:5179"
+echo "📍 メインアプリ: http://localhost:5180"
+echo "📍 スクレイピングサーバー: http://localhost:3003"
+echo "📍 画像生成エージェント: http://localhost:5181"
 echo "   - Google Search API: /api/google-search"
 echo "   - Puppeteer Scraping: /api/scrape"
 echo ""

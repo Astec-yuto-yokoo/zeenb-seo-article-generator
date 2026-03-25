@@ -20,11 +20,11 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       host: "127.0.0.1",
-      port: 5178,
+      port: 5180,
       strictPort: true,
       proxy: {
         "/api": {
-          target: "http://localhost:3002",
+          target: "http://localhost:3003",
           changeOrigin: true,
           secure: false,
         },

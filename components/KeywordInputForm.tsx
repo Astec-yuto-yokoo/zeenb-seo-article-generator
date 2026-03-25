@@ -37,7 +37,7 @@ const KeywordInputForm: React.FC<KeywordInputFormProps> = ({
   apiUsageWarning,
   apiBaseUrl = import.meta.env.VITE_API_URL?.replace("/api", "") ||
     import.meta.env.VITE_BACKEND_URL ||
-    "http://localhost:3001",
+    "http://localhost:3003",
   onOpenImageAgent,
 }) => {
   // デバッグ用ログ
@@ -262,7 +262,7 @@ const KeywordInputForm: React.FC<KeywordInputFormProps> = ({
                 isTestMode: true,
               });
             } else {
-              const imageGenUrl = import.meta.env.VITE_IMAGE_GEN_URL || "http://localhost:5177";
+              const imageGenUrl = import.meta.env.VITE_IMAGE_GEN_URL || "http://localhost:5181";
               const newWindow = window.open(imageGenUrl, "_blank");
               if (newWindow) {
                 setTimeout(() => {

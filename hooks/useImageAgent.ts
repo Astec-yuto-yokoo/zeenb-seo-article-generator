@@ -81,7 +81,7 @@ export function useImageAgent(options: UseImageAgentOptions = {}): UseImageAgent
   const getImageGenUrl = useCallback(() => {
     return (
       import.meta.env.VITE_IMAGE_GEN_URL ||
-      "http://localhost:5177"
+      "http://localhost:5181"
     );
   }, []);
 

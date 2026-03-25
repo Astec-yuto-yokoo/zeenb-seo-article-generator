@@ -16,7 +16,7 @@ const chromium = require("@sparticuz/chromium");
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
 const app = express();
-const PORT = process.env.PORT || 3002; // factory用（apaman=3001と共存）
+const PORT = process.env.PORT || 3003; // zeenb用（apaman=3001, factory=3002と共存）
 
 // Renderのプロキシ設定（Rate Limitingエラー対策）
 app.set("trust proxy", true);
@@ -30,16 +30,11 @@ app.use(
 
 // CORS設定（許可するオリジンのみ）
 const allowedOrigins = [
-  // ローカル開発環境（このシステム）
-  "http://localhost:5178",
-  "http://127.0.0.1:5178",
-  "http://localhost:5179", // 画像生成エージェント
-  "http://127.0.0.1:5179",
-  // 別システム（共用スクレイピングサーバー）
-  "http://localhost:5176",
-  "http://127.0.0.1:5176",
-  "http://localhost:5177",
-  "http://127.0.0.1:5177",
+  // ローカル開発環境（zeenb用）
+  "http://localhost:5180",
+  "http://127.0.0.1:5180",
+  "http://localhost:5181", // 画像生成エージェント
+  "http://127.0.0.1:5181",
   // 環境変数で追加設定（本番環境用）
   process.env.PRODUCTION_DOMAIN,   // 本番ドメイン
   process.env.SEO_FRONTEND_URL,    // SEOエージェントのURL
@@ -1360,8 +1355,19 @@ app.post("/api/wordpress/create-post", async (req, res) => {
 
     if (slug) postData.slug = slug;
 
+    // カスタム投稿タイプ対応（journal等）
+    const wpPostType = process.env.WP_POST_TYPE || "posts";
+    const wpTaxonomy = process.env.WP_TAXONOMY;
+    const wpCategoryId = process.env.WP_CATEGORY_ID;
+
+    // タクソノミー（カテゴリー）を設定
+    if (wpTaxonomy && wpCategoryId) {
+      postData[wpTaxonomy] = [parseInt(wpCategoryId, 10)];
+    }
+
     // WordPress REST APIに投稿
-    const apiUrl = wpBaseUrl.replace(/\/+$/, "") + "/wp-json/wp/v2/posts";
+    const restBase = wpPostType === "posts" ? "posts" : wpPostType;
+    const apiUrl = wpBaseUrl.replace(/\/+$/, "") + "/wp-json/wp/v2/" + restBase;
     const authHeader =
       "Basic " +
       Buffer.from(`${wpUsername}:${wpAppPassword}`).toString("base64");

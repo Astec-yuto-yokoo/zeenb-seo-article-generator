@@ -94,44 +94,29 @@ readability_rules:
       avoid: "『結論』という単語の直接使用"
     paragraph_end: "次段落へのブリッジ一句"
   breaks_lists:
-    when_to_break: ["話題転換","3句点以上の連続","列挙が3点以上の時は箇条書き化"]
-    bullet_style: "名詞始まり/文末表記の統一"
-    bullet_length_rule: |
-      【重要】箇条書きの文字数制限ルール
+    when_to_break: ["話題転換","3句点以上の連続"]
+    list_prohibition: |
+      【最重要】<ul><ol><li>タグの使用は完全に禁止
 
-      ■ 基本ルール
-      - 箇条書き1項目は日本語全角10文字以内
-      - 単語・熟語のみを記載（説明文は含めない）
-      - 詳細説明は箇条書きの後に通常文章で記述
+      古いエディタで表示崩れが発生するため、箇条書き（<ul>/<ol>/<li>）は一切使用しない。
+      代わりに以下の2パターンで代替する。
 
-      ■ 悪い例 ❌
-      ・Webサイト・SNSコンテンツ制作：ブログの挿絵やSNS投稿用の画像を、外注することなく低コストかつ短時間で作成できます。
-      ・広告・マーケティング素材：広告バナーやプレゼンテーション資料に使うイメージ画像を、デザインの専門知識がなくても手軽に用意できます。
+      ■ パターンA：項目＋説明がある場合 → <h4>見出し + 通常テキスト
+      <h4>同系色の濃淡</h4>
+      <p>ベージュとダークブラウン、ライトグレーとチャコールグレーなど、同じ色相で明るさが違う色を組み合わせる方法です。統一感があり、上品で落ち着いた印象に仕上がります。</p>
 
-      問題点：
-      - 「：」以降の説明文が含まれている
-      - 1項目が30文字以上になっている
-      - スマホで複数行に渡って表示される
+      <h4>類似色</h4>
+      <p>ベージュとアイボリーなど、色相環で隣り合う色を組み合わせるパターンです。馴染みが良く、自然で穏やかな雰囲気になります。</p>
 
-      ■ 良い例 ✅
-      ・Webサイト・SNSコンテンツ制作
-      ・広告・マーケティング素材
-      ・製品デザインの試作
+      ■ パターンB：手順・フローなど番号に意味がある場合 → <strong>丸数字 + 見出し</strong> + 通常テキスト
+      <p><strong>①現地調査・診断</strong></p>
+      <p>外壁の劣化状況や塗膜の厚みを専門スタッフが現地で確認します。</p>
 
-      ユースケースとしては、上記のような場面が考えられます。
+      <p><strong>②塗料選定・見積もり</strong></p>
+      <p>建物の状態と予算に合った最適な塗料を提案し、詳細な見積もりを作成します。</p>
 
-      ブログの挿絵やSNS投稿用の画像を、外注することなく低コストかつ短時間で作成が可能。広告バナーやプレゼンテーション資料に使うイメージ画像を、デザインの専門知識がなくても手軽に用意できます。
-
-      ■ 構造パターン
-      [導入文]
-
-      ・項目1（10文字以内）
-      ・項目2（10文字以内）
-      ・項目3（10文字以内）
-
-      [つなぎ文]（例：上記のような場面が考えられます）
-
-      [詳細説明の通常文章]
+      <p><strong>③施工・品質検査</strong></p>
+      <p>認定施工店が施工し、完了後に品質検査を行います。</p>
   trimming_examples:
     - "〜することができる → 〜できる"
     - "〜といったような → 〜など"
@@ -411,14 +396,9 @@ output_contract:
       * 「しかし」「一方で」「また」「さらに」などの接続詞が来たら段落分けを検討
       * 具体例を挙げる前は新しい段落にする
     - 太字: <strong>重要部分</strong>
-    - 箇条書き（以下の場合は積極的に使用）:
-      * 3つ以上の選択肢や項目を並列で示す時
-      * メリット・デメリットを列挙する時
-      * ステップや手順を説明する時
-      <ul>
-        <li>項目1</li>
-        <li>項目2</li>
-      </ul>
+    - 列挙・項目並列（<ul>/<ol>/<li>は使用禁止）:
+      * 項目＋説明がある場合 → <h4>見出し</h4> + <p>説明文</p>
+      * 手順・フローなど番号に意味がある場合 → <p><strong>①見出し</strong></p> + <p>説明文</p>
     - 表（重要）: マークダウン記法（|や---）は絶対使用禁止。必ず以下の形式：
       <table>
         <thead>
@@ -504,7 +484,7 @@ self_checklist:
   readability:
     - "[ ] 一文≤80字/平均40–60字"
     - "[ ] 主述ねじれ無し・語尾/書き出し同型3連続回避"
-    - "[ ] 箇条書き1項目は10文字以内・説明文なし・コロン（:）禁止"
+    - "[ ] <ul>/<ol>/<li>タグ不使用（h4またはstrong丸数字で代替）"
   emphasis_links:
     - "[ ] 各見出しの<strong>は1–3箇所、本文全体で10%未満"
   examples_minimums:
@@ -530,8 +510,7 @@ quality_gates:
     - "見出しは検索意図に合致（主要キーワードをH2前半に）"
     - "冒頭500字に要点・数値・固有名詞を配置"
   readability:
-    - "箇条書きは3〜7点を目安"
-    - "箇条書き1項目は10文字以内（説明文・コロン禁止）"
+    - "<ul>/<ol>/<li>は使用禁止。列挙はh4見出しまたはstrong丸数字で代替"
     - "1段落は2–4文"
     - "冗長な副詞の連発を避ける"
 
@@ -579,7 +558,7 @@ async function fetchInternalLinkMap(): Promise<Map<string, string>> {
     const API_URL =
       import.meta.env.VITE_API_URL
         ? import.meta.env.VITE_API_URL.replace("/api", "")
-        : import.meta.env.VITE_BACKEND_URL || "http://localhost:3001";
+        : import.meta.env.VITE_BACKEND_URL || "http://localhost:3003";
     const response = await fetch(
       `${API_URL}/api/spreadsheet-mode/internal-links`,
       {
@@ -619,7 +598,7 @@ async function fetchSitePages(): Promise<Array<{ url: string; title: string }>> 
     const BACKEND_URL =
       import.meta.env.VITE_API_URL
         ? import.meta.env.VITE_API_URL.replace("/api", "")
-        : import.meta.env.VITE_BACKEND_URL || "http://localhost:3001";
+        : import.meta.env.VITE_BACKEND_URL || "http://localhost:3003";
 
     const domain =
       import.meta.env.VITE_COMPANY_MEDIA_URL ||

@@ -82,6 +82,13 @@ function cleanupArticleContent(content: string): string {
     .replace(/<b>/gi, "<strong>")
     .replace(/<\/b>/gi, "</strong>");
 
+  // 3. h2/h3見出し直前の不要な空行・改行・空pタグを除去（CMS側でマージンが入るため）
+  // 空の<p>タグ、<br>、&nbsp; のみの行を見出し前から除去
+  cleaned = cleaned.replace(/(<p>\s*(<br\s*\/?>|\s|&nbsp;)*\s*<\/p>\s*)+(<h[23])/gi, "$3");
+  cleaned = cleaned.replace(/(<br\s*\/?>(\s|&nbsp;)*)+(<h[23])/gi, "$3");
+  // <ul>/<ol>/<li>タグを除去（古いエディタで崩れるため）
+  cleaned = cleaned.replace(/<\/?(?:ul|ol|li)[^>]*>/gi, "");
+
   // 変更内容をログ出力
   const asteriskCount = (content.match(/\*/g) || []).length;
   const bCount = (content.match(/<b>/gi) || []).length;
@@ -91,6 +98,11 @@ function cleanupArticleContent(content: string): string {
   }
   if (bCount > 0) {
     console.log(`  ✅ bタグ→strongタグ変換: ${bCount}箇所`);
+  }
+
+  const listTagCount = (content.match(/<\/?(?:ul|ol|li)[^>]*>/gi) || []).length;
+  if (listTagCount > 0) {
+    console.log(`  ✅ ul/ol/liタグ除去: ${listTagCount}箇所`);
   }
 
   console.log("🧹 クリーンアップ処理完了");
@@ -1973,7 +1985,7 @@ ${
         // フォールバック: 別タブで開く
         const imageGenUrl =
           import.meta.env.VITE_IMAGE_GEN_URL ||
-          "http://localhost:5177";
+          "http://localhost:5181";
         const newWindow = window.open(imageGenUrl, "_blank");
 
         if (newWindow) {
@@ -3031,7 +3043,7 @@ const startImageGeneration = async (
       // フォールバック: 別タブで開く
       const imageGenUrl =
         import.meta.env.VITE_IMAGE_GEN_URL ||
-        "http://localhost:5177";
+        "http://localhost:5181";
       const newWindow = window.open(imageGenUrl, "_blank");
 
       if (newWindow) {
