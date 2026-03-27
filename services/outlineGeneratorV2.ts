@@ -993,3 +993,84 @@ ${referenceMaterialContext}
     throw new Error('構成案の生成に失敗しました');
   }
 }
+
+/**
+ * H2ブロック単位で構成案を修正する
+ * ユーザーのプロンプト指示に基づき、指定H2セクションのみをGeminiで修正
+ */
+export async function reviseOutlineSection(
+  outline: SeoOutlineV2,
+  sectionIndex: number,
+  userPrompt: string,
+  keyword: string
+): Promise<OutlineSectionV2> {
+  const section = outline.outline[sectionIndex];
+  if (!section) {
+    throw new Error(`セクション ${sectionIndex} が見つかりません`);
+  }
+
+  console.log(`🔧 構成案H2修正開始: H2-${sectionIndex + 1}「${section.heading}」`);
+  console.log(`📝 修正指示: ${userPrompt}`);
+
+  const prompt = `あなたはSEO記事構成の専門家です。以下のH2セクションをユーザーの指示に基づいて修正してください。
+
+【キーワード】
+${keyword}
+
+【修正対象のH2セクション】
+見出し: ${section.heading}
+執筆メモ: ${section.writingNote}
+H3一覧:
+${section.subheadings.map((sub, i) => `  H3-${i + 1}: ${sub.text}（メモ: ${sub.writingNote || 'なし'}）`).join('\n')}
+画像提案: ${section.imageSuggestion}
+
+【ユーザーの修正指示】
+${userPrompt}
+
+【構成全体のH2一覧（文脈把握用）】
+${outline.outline.map((s, i) => `H2-${i + 1}: ${s.heading}`).join('\n')}
+
+【出力ルール】
+- 修正指示に従って、対象H2セクションのみを修正したJSON を返す
+- H3は「0個」または「2個以上」（1個は禁止）
+- 他のH2との内容重複を避ける
+- 以下のJSON形式で返すこと（これ以外のテキストは出力しない）
+
+{
+  "heading": "修正後のH2見出し",
+  "subheadings": [
+    { "text": "H3見出し", "writingNote": "執筆メモ" }
+  ],
+  "imageSuggestion": "画像提案",
+  "writingNote": "H2の執筆メモ（最大200字）"
+}`;
+
+  try {
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-pro",
+      generationConfig: {
+        temperature: 0.4,
+        maxOutputTokens: 4000,
+        responseMimeType: "application/json"
+      }
+    });
+
+    const result = await model.generateContent(prompt);
+    let responseText = result.response.text();
+    responseText = responseText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+
+    const revised = JSON.parse(responseText) as OutlineSectionV2;
+
+    // H3が1個の場合は0個に調整
+    if (revised.subheadings && revised.subheadings.length === 1) {
+      console.warn('⚠️ H3が1個 → 0個に調整');
+      revised.subheadings = [];
+    }
+
+    console.log(`✅ 構成案H2修正完了: 「${revised.heading}」`);
+    return revised;
+  } catch (error) {
+    console.error('構成案H2修正エラー:', error);
+    throw new Error('構成案のH2修正に失敗しました');
+  }
+}

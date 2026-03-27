@@ -1,217 +1,185 @@
-# CLAUDE.md
+# プロジェクト概要
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+SEO最適化された記事構成・記事本文を自動生成するツール（zeenb クライアント専用カスタマイズ版）。Gemini API を軸に、競合調査・構成生成・執筆・校閲までをワンストップで処理する。
 
----
-
-## プロジェクト概要
-
-SEO最適化された記事構成・記事本文を自動生成するツール。Gemini APIを軸に、競合調査・構成生成・執筆・校閲までをワンストップで処理。
-
----
-
-## 開発コマンド
+# コマンド
 
 ```bash
-# フロントエンド（:5176）
-npm run dev
-
-# スクレイピングサーバー（:3001）
-npm run server
-# または: cd server && node scraping-server.js
-
-# 両方同時起動（推奨）
+# 推奨: 全サーバー一括起動
 bash ./start.sh
+
+# 個別起動
+npm run dev          # フロントエンド（ポート 5180）
+npm run server       # スクレイピングサーバー（ポート 3003）
+cd ai-article-imager-for-wordpress && npm run dev  # 画像生成エージェント（ポート 5181）
 
 # ビルド
 npm run build
+
+# サーバー疎通確認
+curl http://localhost:3003/api/health
 ```
 
-> `npm run start` はバックグラウンド起動が不安定なため、`start.sh` か別ターミナルでの起動を推奨。
+# 技術スタック
 
-### 起動確認
+| カテゴリ | 技術 |
+|----------|------|
+| フロントエンド | React 19, Vite 6, TypeScript, Tailwind CSS |
+| バックエンド | Node.js, Express 4 |
+| AI（構成・執筆・修正） | Gemini 2.5 Pro（`@google/generative-ai`） |
+| AI（最終校閲） | GPT-5 / gpt-5-mini / gpt-5-nano（OpenAI Responses API） |
+| AI（MoA相互検証） | Claude（`@anthropic-ai/sdk`） |
+| スクレイピング | Puppeteer（開発）/ puppeteer-core + @sparticuz/chromium（本番） |
+| 外部データ | Google Custom Search API, Google Drive API（ADC認証） |
+| DB | Supabase |
+| OCR | Tesseract.js, Sharp（eng/jpn 訓練データ同梱） |
+| その他 | kuromoji（形態素解析）, docx（Word出力）, pdf-parse（PDF解析） |
 
-```bash
-curl http://localhost:3001/api/health
-# 期待値: {"status":"ok","message":"スクレイピングサーバーは正常に動作しています"}
+# ディレクトリ構成
+
+```
+zeenb-seo-article-generator/
+├── App.tsx                    # メインアプリ（タブ管理・全体統合）
+├── types.ts                   # グローバル型定義
+├── vite.config.ts             # Vite設定（ポート5180、/api→3003プロキシ）
+├── start.sh                   # 全サーバー一括起動スクリプト
+├── components/                # React UIコンポーネント（32ファイル）
+│   ├── ArticleWriter.tsx      # 執筆フロー全体UI（執筆・チェック・校閲）
+│   ├── OutlineDisplayV2.tsx   # 構成V2表示・編集
+│   ├── CompetitorResearchWebFetch.tsx  # 競合調査UI
+│   ├── ArticleRevisionForm.tsx        # 修正指示UI
+│   └── FrequencyWordsTab.tsx  # 頻出単語分析UI
+├── services/                  # サービス層（43ファイル）
+│   ├── outlineGeneratorV2.ts  # 構成V2生成（ルール定義含む）
+│   ├── outlineCheckerV2.ts    # 構成V2バリデーション
+│   ├── writingAgentV3.ts      # 記事執筆（Gemini 2.5 Pro + Grounding）
+│   ├── writingCheckerV3.ts    # 執筆品質チェック
+│   ├── articleRevisionService.ts  # 記事修正（手動ボタン後のみ）
+│   ├── competitorResearchWithWebFetch.ts  # 競合調査（現行）
+│   ├── driveAutoAuth.cjs      # Google Drive ADC認証（CommonJS形式）
+│   └── finalProofreadingAgents/  # マルチエージェント校閲（現行）
+│       ├── MultiAgentOrchestrator.ts
+│       ├── IntegrationAgent.ts    # 100点満点スコア統合（75点以上で合格）
+│       ├── MixtureOfAgentsVerifier.ts  # Gemini+GPT-5+Claude の3モデル相互検証
+│       └── （専門エージェント7個＋出典エージェント3個）
+├── utils/                     # ヘルパー関数（8ファイル）
+├── hooks/
+│   └── useImageAgent.ts       # 画像生成エージェント連携
+├── server/                    # バックエンド（Express）
+│   ├── scraping-server.js     # メインサーバー（SearchAPI + Puppeteer）
+│   ├── eng.traineddata        # Tesseract OCR 英語データ
+│   ├── jpn.traineddata        # Tesseract OCR 日本語データ
+│   └── api/                   # 補助エンドポイント（Drive, Sheets, リンク検証）
+├── ai-article-imager-for-wordpress/  # 画像生成エージェント（サブプロジェクト・ポート5181）
+│   └── image-generation-agent/      # Vue/Vite副プロジェクト
+├── docs/                      # デプロイ・セットアップドキュメント
+└── dist/                      # ビルド出力
 ```
 
----
+# ルール・注意点
 
 ## ポート割り当て
 
 | ポート | 用途 |
 |--------|------|
-| 5176 | メインアプリ（Vite） |
-| 3001 | スクレイピングサーバー（Puppeteer） |
-| 5177 | 画像生成エージェント（予約済み） |
-| 5178 | 新規エージェント用（予約済み） |
-| 3002 | 追加APIサーバー用（予約済み） |
+| 5180 | メインアプリ（Vite） |
+| 3003 | スクレイピングサーバー（Puppeteer + SearchAPI） |
+| 5181 | 画像生成エージェント |
 
----
+## コーディング
 
-## 環境変数（`.env`）
-
-```
-GEMINI_API_KEY          # Gemini API
-GOOGLE_API_KEY          # Custom Search API
-GOOGLE_SEARCH_ENGINE_ID # カスタム検索エンジンID
-OPENAI_API_KEY          # GPT-5用（最終校閲エージェント）
-COMPANY_DATA_FOLDER_ID  # Google DriveフォルダID
-VITE_INTERNAL_API_KEY   # ブラウザ側内部API認証
-VITE_API_URL            # APIのベースURL
-```
-
-`VITE_` プレフィックスのある変数のみブラウザ側で参照可能。`GEMINI_API_KEY` は Vite の `define` 設定で `process.env.GEMINI_API_KEY` としても注入している（`vite.config.ts` 参照）。
-
-Vite のプロキシ設定により `/api/*` は `localhost:3001` へ転送される。
-
----
-
-## アーキテクチャ概要
-
-### 処理フロー（App.tsx が全体を統合）
-
-```
-キーワード入力
-  ↓
-競合調査 (competitorResearchWithWebFetch.ts)
-  → スクレイピングサーバー (server/scraping-server.js) 経由で競合記事のH2/H3を取得
-  ↓
-構成生成 V2 (outlineGeneratorV2.ts)  →  構成チェック (outlineCheckerV2.ts)
-  ↓
-執筆エージェント (writingAgentV3.ts)
-  → Gemini 2.5 Pro + Grounding（Google検索と連携）
-  ↓
-執筆チェック (writingCheckerV3.ts)
-  ↓
-最終校閲マルチエージェント (services/finalProofreadingAgents/)
-  → 11エージェント並列・順次実行 → IntegrationAgent がスコア統合
-  ↓
-記事修正 (articleRevisionService.ts)  ← 人間が確認してボタンを押した場合のみ
-```
-
-### フロントエンド（React + Vite）
-
-- `App.tsx`: タブ切り替えによる全ページ管理、各サービスの呼び出し
-- `components/`: 各タブのUIコンポーネント
-  - `OutlineDisplayV2.tsx`: 構成V2の表示
-  - `ArticleWriter.tsx`: 執筆フロー全体（執筆・チェック・校閲）
-  - `ArticleRevisionForm.tsx`: 修正指示UI
-  - `CompetitorResearchWebFetch.tsx`: 競合調査UI
-  - `FrequencyWordsTab.tsx`: 頻出単語分析
-
-### バックエンド（Express.js）
-
-- `server/scraping-server.js`: Puppeteerで競合記事をスクレイピング
-  - 開発: `puppeteer`（Chromium付属）
-  - 本番: `puppeteer-core` + `@sparticuz/chromium`
-- `server/api/`: Google Drive, Supabase連携など補助エンドポイント
-
-### サービス層（`services/`）
-
-| ファイル | 役割 |
-|----------|------|
-| `geminiServiceUpdated.ts` | Gemini API呼び出し（構成V1） |
-| `outlineGeneratorV2.ts` | 構成V2生成（ルール定義含む） |
-| `outlineCheckerV2.ts` | 構成V2バリデーション |
-| `writingAgentV3.ts` | 記事執筆（Gemini 2.5 Pro） |
-| `writingCheckerV3.ts` | 執筆品質チェック（Gemini 2.5 Pro） |
-| `articleRevisionService.ts` | 記事修正（Gemini 2.5 Pro） |
-| `finalProofreadingAgent.ts` | 単体版最終校閲（旧） |
-| `finalProofreadingAgents/` | マルチエージェント版最終校閲（現行） |
-| `companyDataService.ts` | 自社実績データ取得 |
-| `driveAutoAuth.cjs` | Google Drive ADC認証（CommonJS形式） |
-| `competitorResearchWithWebFetch.ts` | 競合調査（現行） |
-
-### AIモデル構成（現行）
-
-| エージェント | モデル |
-|-------------|--------|
-| 執筆 (writingAgentV3) | `gemini-2.5-pro` |
-| 執筆チェック (writingCheckerV3) | `gemini-2.5-pro` |
-| 記事修正 (articleRevisionService) | `gemini-2.5-pro` |
-| 最終校閲マルチエージェント群 | `gpt-5-nano` / `gpt-5-mini`（OpenAI Responses API） |
-
-### 最終校閲マルチエージェント実行フロー
-
-```
-フェーズ1（並列）: ProperNounsAgent, NumbersStatsAgent, DatesTimelineAgent,
-                    FactsCasesAgent, TechnicalAgent, CompanyAgent, LegalAgent（オプション）
-フェーズ2（順次）: SourceRequirementAgent → SourceEnhancementAgent → CitationsAgent
-フェーズ3（統合）: IntegrationAgent（100点満点スコア算出、75点以上で合格）
-```
-
-修正は自動適用せず、**人間がボタンを押した場合のみ**実行。
-
----
-
-## 重要なコーディングルール
-
-### Optional Chaining 禁止
-
-`?.` 演算子は使用しない（Claude Code クラッシュの原因）。代わりに段階的な null チェックを実装。
+**Optional Chaining（`?.`）禁止** — Claude Code クラッシュの原因になる。段階的 null チェックに置き換える。
 
 ```typescript
-// ❌
+// ❌ 禁止
 const name = obj?.user?.name;
-// ✅
+// ✅ 正しい
 const name = obj && obj.user ? obj.user.name : undefined;
 ```
 
-Google Drive 関連の Node.js スクリプトは `.cjs` 拡張子で CommonJS 形式で記述。
+- Google Drive 関連の Node.js スクリプトは `.cjs` 拡張子（CommonJS形式）で記述
+- 技術仕様（モデル名・ライブラリ・バージョン）を勝手に変更しない。変更が必要な場合は提案して承認を得てから実装
+- コミットは明示的に指示された時のみ
 
-### 技術仕様の勝手な変更禁止
-
-ユーザーが指定したモデル名・ライブラリ・バージョンを「存在しない」「利用できない」と判断して勝手に変更しない。GPT-5・Responses API 等は指定通り実装する。変更が必要な場合は必ず提案として明示し、承認を得てから実装する。
-
-### コミットは明示的に指示された時のみ
-
----
-
-## OpenAI Responses API 仕様（GPT-5用）
+## OpenAI Responses API（GPT-5用）
 
 ```typescript
 const response = await (openai as any).responses.create({
-  model: 'gpt-5-mini',       // gpt-5 / gpt-5-mini / gpt-5-nano
-  input: userInput,           // messages ではなく input
-  tools: [{ type: 'web_search' }],  // シンプルな形式
-  reasoning: { effort: 'high' },    // low/medium/high（lowはweb_search不可）
-  max_completion_tokens: 4000        // max_tokens ではない
+  model: 'gpt-5-mini',        // gpt-5 / gpt-5-mini / gpt-5-nano
+  input: userInput,            // messages ではなく input
+  tools: [{ type: 'web_search' }],
+  reasoning: { effort: 'high' },
+  max_completion_tokens: 4000  // max_tokens ではない
 });
 // temperature は GPT-5 では 1.0 固定（変更不可）
 ```
 
----
+## 環境変数
+
+```
+GEMINI_API_KEY / VITE_GEMINI_API_KEY   # Gemini API（必須）
+GOOGLE_API_KEY / VITE_GOOGLE_API_KEY   # Custom Search API（必須）
+GOOGLE_SEARCH_ENGINE_ID / VITE_GOOGLE_SEARCH_ENGINE_ID  # カスタム検索エンジンID（必須）
+OPENAI_API_KEY                         # GPT-5最終校閲用
+ANTHROPIC_API_KEY                      # Claude MoA相互検証用
+INTERNAL_API_KEY / VITE_INTERNAL_API_KEY
+COMPANY_DATA_FOLDER_ID                 # Google DriveフォルダID
+WP_BASE_URL / WP_USERNAME / WP_APP_PASSWORD  # WordPress連携
+SLACK_WEBHOOK_URL
+VITE_SERVICE_NAME / VITE_COMPANY_NAME  # 自社ブランド情報
+VITE_COMPANY_NOTE_URL / VITE_COMPANY_MEDIA_URL / VITE_COMPANY_SITE_URL  # 自社出典URL
+GOOGLE_APPLICATION_CREDENTIALS_JSON   # GCP認証（画像生成エージェント用）
+```
+
+`VITE_` プレフィックスのある変数のみブラウザ側で参照可能。
 
 ## 構成 Ver.2 ルール（絶対厳守）
 
-### タイトル
-- 文字数: **29〜35文字**（32文字前後が理想）
-- 自社サービス名を含めない
-- 【】などの記号で囲まない
+- タイトル: **29〜35文字**（32文字前後が理想）、自社サービス名・【】記号を含めない
+- H2見出し: 【】等記号で囲まない。「○選」等の数字があればH3は**その数と同数**で**通し番号**を付ける
+- H3配分: H2ごとに「0個」または「2個以上」（**1個は禁止**）
+- 最後3つのH2（固定順序）:
+  1. FAQ・よくある質問（任意）
+  2. **自社サービス訴求**（必須・H3を2〜3個）
+  3. **まとめ**（必須・H3は0個）— 形式: `まとめ：[キーワード]を含む総括的なサブタイトル`
 
-### H2見出し
-- 記号（【】等）で囲まない
-- 「○選」「○つ」等の数字があれば、H3は**その数と同数**作成し**通し番号**を付ける
+## 記事文字数制御
 
-### H3配分
-- H2ごとに「0個」または「2個以上」（1個は禁止）
-- まとめセクションは必ず0個
+- **目標**: 5,000〜6,000文字（デフォルト5,500文字）
+- `writingAgentV3.ts` の `WritingRequest.targetCharCount` で制御
+- `ArticleWriter.tsx` で `characterCountAnalysis.average` を上限6,000でキャップして渡す
+- プロンプトで「±10%以内、超過禁止」と明示指示
+- `maxOutputTokens: 8192` でトークン上限も制限
+- **注意**: `maxOutputTokens` や `length_control` のプロンプト文言を勝手に緩和しないこと
 
-### 最後3つのH2（固定順序）
-1. FAQ・よくある質問（ある場合）
-2. **自社サービス訴求**（まとめの直前、必須）— H3 2〜3個、サービス名を含める
-3. **まとめ**（最後、必須）— フォーマット: `まとめ：[キーワード]を含む総括的なサブタイトル`
+## H2ブロック単位修正機能
 
-### 関連ファイル
-- `services/outlineGeneratorV2.ts` — ルール定義
-- `services/outlineCheckerV2.ts` — チェッカー
-- `utils/testDataGeneratorV2.ts` — テストデータ
+### 構成案H2修正（構成生成後・執筆前）
+- `services/outlineGeneratorV2.ts` の `reviseOutlineSection()` — 対象H2セクションの構成をGemini 2.5 Proで修正
+- `components/OutlineDisplayV2.tsx` — 各H2ブロック下にtextarea＋「AI修正」ボタン
+- `App.tsx` — `onOutlineUpdate` コールバックで構成案stateを更新
 
-テスト確認: http://localhost:5176 → 「🎓 テスト構成」ボタン
+### 本文H2修正（執筆後）
+- `services/articleRevisionService.ts` の `reviseArticleH2Section()` — 記事HTMLからH2セクションを正規表現で抽出→修正→再結合
+- `components/ArticleWriter.tsx` — 記事プレビュー下に折りたたみ式「H2セクション単位で修正」パネル
+- 修正後は `fixWordPressListBlocks()` / `fixWordPressTableBlocks()` で自動整形
 
----
+## 処理フロー
+
+```
+キーワード入力
+  → 競合調査（competitorResearchWithWebFetch → scraping-server）
+  → 構成生成V2（outlineGeneratorV2 → outlineCheckerV2）
+  → [任意] 構成案H2修正（reviseOutlineSection）
+  → 執筆（writingAgentV3: Gemini 2.5 Pro + Grounding、目標5000〜6000文字）
+  → 執筆チェック（writingCheckerV3）
+  → [任意] 本文H2修正（reviseArticleH2Section）
+  → 最終校閲マルチエージェント
+      Phase 1（並列）: 7専門エージェント
+      Phase 2（順次）: 出典エージェント3個
+      Phase 3（統合）: IntegrationAgent（75点以上で合格）
+  → 記事修正（人間確認後ボタン押下時のみ）
+```
 
 ## Google Drive ADC認証
 
@@ -221,19 +189,31 @@ gcloud auth application-default login \
   --scopes=https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/drive.readonly
 ```
 
-認証フロー: ADC認証（優先）→ 失敗時は API Key 認証にフォールバック
-
-関連ファイル: `services/driveAutoAuth.cjs`, `server/api/company-data.js`
-
 ADC認証が失敗する場合: `gcloud auth application-default login --force`
 
----
+## 姉妹プロジェクト（3プロジェクト共通管理）
 
-## 執筆レギュレーション要点
+同一コードベースのクライアント別カスタマイズ版が3つ存在する。共通修正は必ず3プロジェクトすべてに適用すること。
 
-- 文体: です・ます調
-- 対象読者: 法人の決裁者・推進担当・現場マネジャー
-- リード文: 200〜350字（悩み代弁→解決策→ベネフィット→読み進め促し）
-- 段落: 1段落2〜4文、平均文長40〜60字
-- 強調: `<b>` タグ（1見出し1〜3箇所）
-- 禁止: 同型文末3連続、抽象的な一般論の羅列、【】等記号見出し、誇大広告（No.1等）
+| プロジェクト | フロント | バックエンド | 画像生成 |
+|---|---|---|---|
+| zeenb-seo-article-generator | 5180 | 3003 | 5181 |
+| factory-seo-article-generator | 5178 | 3002 | 5179 |
+| apaman-seo-article-generator | 5176 | 3001 | 5177 |
+
+- バックエンドポートのハードコード箇所が多数あるため、ポート変更時はサービスファイル全体を `localhost:旧ポート` で検索して漏れなく置換すること
+
+## WordPress ブロックエディタ互換
+
+記事HTMLは WordPress Gutenberg 互換フォーマットで出力する。
+
+- **リスト**: `fixWordPressListBlocks()` で `<!-- wp:list -->` + `wp-block-list` クラスに変換（factory・apaman のみ。zeenb はリストタグ自体を除去）
+- **テーブル**: `fixWordPressTableBlocks()` で `<!-- wp:table -->` + `<figure class="wp-block-table">` ラッパーに変換（3プロジェクト共通）
+- 両関数とも冪等性あり（既にブロック構造の場合も正しく処理）
+- クリーンアップ処理（`cleanupArticleContent`）内で順に呼び出される
+
+## テーブル生成ルール
+
+- Markdown記法（`|` や `---`）は禁止。必ず `<table>` HTMLで出力
+- **セル結合（rowspan/colspan）は禁止**。同じ値が複数行に跨がる場合でも各行すべてに同じ値を繰り返し記載する（WordPress エディタにセル結合機能がないため）
+- テーブルスタイルは `index.css` の `.article-content table` で定義

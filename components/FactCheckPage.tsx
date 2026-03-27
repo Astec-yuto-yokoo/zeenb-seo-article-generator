@@ -184,7 +184,7 @@ const FactCheckPage: React.FC = () => {
                 </div>
                 <div className="bg-gray-50 p-4 rounded-lg overflow-auto max-h-96 border border-gray-200">
                   <div
-                    className="text-sm text-gray-600"
+                    className="text-sm text-gray-600 article-content"
                     dangerouslySetInnerHTML={{ __html: result.correctedText }}
                   />
                 </div>

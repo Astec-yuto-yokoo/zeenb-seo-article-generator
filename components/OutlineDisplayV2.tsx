@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import type { SeoOutlineV2 } from '../types';
+import type { SeoOutlineV2, OutlineSectionV2 } from '../types';
 import { countCharacters } from '../utils/characterCounter';
+import { reviseOutlineSection } from '../services/outlineGeneratorV2';
 import {
   TitleIcon,
   TargetIcon,
@@ -16,6 +17,7 @@ import {
 interface OutlineDisplayV2Props {
   outline: SeoOutlineV2;
   keyword: string;
+  onOutlineUpdate?: (updatedOutline: SeoOutlineV2) => void; // 構成案更新コールバック
   onStartWriting?: () => void; // Ver.2執筆
   onStartWritingV1?: () => void; // Ver.1執筆
   onStartWritingV3?: () => void; // Ver.3執筆（Gemini Pro + Grounding）
@@ -35,8 +37,40 @@ const Card: React.FC<{ icon: React.ReactNode; title: string; children: React.Rea
   </div>
 );
 
-const OutlineDisplayV2: React.FC<OutlineDisplayV2Props> = ({ outline, keyword, onStartWriting, onStartWritingV1, onStartWritingV3 }) => {
+const OutlineDisplayV2: React.FC<OutlineDisplayV2Props> = ({ outline, keyword, onOutlineUpdate, onStartWriting, onStartWritingV1, onStartWritingV3 }) => {
   const [copyButtonText, setCopyButtonText] = useState('Markdownコピー');
+  const [revisionPrompts, setRevisionPrompts] = useState<Record<number, string>>({});
+  const [revisingSection, setRevisingSection] = useState<number | null>(null);
+  const [revisionError, setRevisionError] = useState<string | null>(null);
+
+  const handleReviseSection = async (sectionIndex: number) => {
+    const prompt = revisionPrompts[sectionIndex];
+    if (!prompt || !prompt.trim()) return;
+    if (!onOutlineUpdate) return;
+
+    setRevisingSection(sectionIndex);
+    setRevisionError(null);
+
+    try {
+      const revisedSection = await reviseOutlineSection(outline, sectionIndex, prompt.trim(), keyword);
+      const updatedSections = [...outline.outline];
+      updatedSections[sectionIndex] = revisedSection;
+      const updatedOutline = { ...outline, outline: updatedSections };
+      onOutlineUpdate(updatedOutline);
+
+      // 成功したらプロンプトをクリア
+      setRevisionPrompts(prev => {
+        const next = { ...prev };
+        delete next[sectionIndex];
+        return next;
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '修正に失敗しました';
+      setRevisionError(`H2-${sectionIndex + 1}: ${msg}`);
+    } finally {
+      setRevisingSection(null);
+    }
+  };
 
   const handleCopyAsMarkdown = () => {
     const markdown = `
@@ -270,6 +304,32 @@ ${outline.competitorComparison.differentiators.map((diff, i) => `  ${i + 1}) ${d
                     </li>
                   ))}
                 </ul>
+              )}
+
+              {/* H2ブロック修正プロンプト */}
+              {onOutlineUpdate && (
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <div className="flex gap-2">
+                    <textarea
+                      value={revisionPrompts[index] || ''}
+                      onChange={(e) => setRevisionPrompts(prev => ({ ...prev, [index]: e.target.value }))}
+                      placeholder={`H2-${index + 1} の修正指示を入力...`}
+                      className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                      rows={2}
+                      disabled={revisingSection === index}
+                    />
+                    <button
+                      onClick={() => handleReviseSection(index)}
+                      disabled={revisingSection === index || !revisionPrompts[index] || !(revisionPrompts[index] || '').trim()}
+                      className="self-end px-4 py-2 text-sm font-semibold text-white bg-blue-500 rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                    >
+                      {revisingSection === index ? '修正中...' : 'AI修正'}
+                    </button>
+                  </div>
+                  {revisionError && revisionError.startsWith(`H2-${index + 1}:`) && (
+                    <p className="mt-1 text-sm text-red-500">{revisionError}</p>
+                  )}
+                </div>
               )}
             </div>
           ))}

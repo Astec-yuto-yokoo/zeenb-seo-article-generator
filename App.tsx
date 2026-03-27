@@ -1402,7 +1402,7 @@ const App: React.FC = () => {
               <LogoIcon className="h-8 w-8 text-blue-600" />
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">
-              Content Creation Agents
+              【zeenb】ブログ作成エージェント
             </h1>
           </div>
           <p className="text-gray-500 text-sm sm:text-base">
@@ -1690,6 +1690,7 @@ const App: React.FC = () => {
                   <OutlineDisplayV2
                     outline={outlineV2}
                     keyword={keyword}
+                    onOutlineUpdate={(updatedOutline) => setOutlineV2(updatedOutline)}
                     onStartWritingV1={() => {
                       setWritingMode("v1");
                       setShowArticleWriter(true);

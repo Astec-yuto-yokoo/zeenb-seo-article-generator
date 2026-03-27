@@ -90,6 +90,40 @@ code {
   margin: 5px 0;
 }
 
+/* 記事内テーブルスタイル */
+.article-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5em 0;
+  font-size: 0.95em;
+}
+
+.article-content thead {
+  background-color: #f0f4f8;
+}
+
+.article-content th,
+.article-content td {
+  border: 1px solid #d1d5db;
+  padding: 10px 14px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.article-content th {
+  font-weight: 600;
+  color: #1f2937;
+  white-space: nowrap;
+}
+
+.article-content tbody tr:nth-child(even) {
+  background-color: #f9fafb;
+}
+
+.article-content tbody tr:hover {
+  background-color: #f0f4f8;
+}
+
 /* CTAボックススタイル */
 .cta-box {
   background: linear-gradient(135deg, #e0f2fe 0%, #bfdbfe 100%);

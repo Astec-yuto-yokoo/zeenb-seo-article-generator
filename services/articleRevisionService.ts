@@ -1642,3 +1642,110 @@ ${originalArticle}
     );
   }
 }
+
+/**
+ * 記事のH2セクション単位修正
+ * 指定したH2見出しのセクションのみをユーザー指示に基づいて修正する
+ */
+export async function reviseArticleH2Section(
+  fullArticleHtml: string,
+  h2Heading: string,
+  userPrompt: string,
+  keyword: string
+): Promise<string> {
+  console.log(`🔧 記事H2セクション修正開始: 「${h2Heading}」`);
+  console.log(`📝 修正指示: ${userPrompt}`);
+
+  // H2セクションの抽出（対象H2から次のH2またはEOFまで）
+  const h2Pattern = /<h2[^>]*>/gi;
+  const matches: Array<{ index: number; text: string }> = [];
+  let match;
+  while ((match = h2Pattern.exec(fullArticleHtml)) !== null) {
+    matches.push({ index: match.index, text: match[0] });
+  }
+
+  // 対象H2の位置を特定
+  let targetStart = -1;
+  let targetEnd = -1;
+  for (let i = 0; i < matches.length; i++) {
+    const sectionStart = matches[i].index;
+    const sectionEnd = i + 1 < matches.length ? matches[i + 1].index : fullArticleHtml.length;
+    const sectionHtml = fullArticleHtml.slice(sectionStart, sectionEnd);
+    // H2タグ内のテキストを抽出して照合
+    const headingTextMatch = sectionHtml.match(/<h2[^>]*>([\s\S]*?)<\/h2>/i);
+    if (headingTextMatch) {
+      const extractedText = headingTextMatch[1].replace(/<[^>]*>/g, '').trim();
+      if (extractedText === h2Heading.trim()) {
+        targetStart = sectionStart;
+        targetEnd = sectionEnd;
+        break;
+      }
+    }
+  }
+
+  if (targetStart === -1) {
+    throw new Error(`H2セクション「${h2Heading}」が記事内に見つかりません`);
+  }
+
+  const targetSection = fullArticleHtml.slice(targetStart, targetEnd);
+  const beforeSection = fullArticleHtml.slice(0, targetStart);
+  const afterSection = fullArticleHtml.slice(targetEnd);
+
+  const prompt = `あなたはSEO記事修正の専門家です。以下のH2セクションをユーザーの指示に基づいて修正してください。
+
+【キーワード】
+${keyword}
+
+【修正対象のH2セクション（HTML）】
+${targetSection}
+
+【ユーザーの修正指示】
+${userPrompt}
+
+【重要ルール】
+- 修正対象のH2セクションのHTMLのみを返すこと
+- H2見出しタグ（<h2>〜</h2>）から始めること
+- HTMLタグ構造を維持する（WordPress Gutenberg互換のwp:コメントタグも保持）
+- 文体（です・ます調）を維持する
+- <b>タグではなく<strong>タグを使う
+- 箇条書きは <!-- wp:list --> / <!-- wp:list-item --> の構造を維持する
+- テーブルは <!-- wp:table --> / <figure class="wp-block-table"> の構造を維持する
+- 出典URLのaタグは削除しない
+- 説明・注釈は一切出力しない。修正後のHTMLのみを返すこと`;
+
+  try {
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-pro",
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 8192,
+      },
+    });
+
+    const startTime = Date.now();
+    const result = await model.generateContent(prompt);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`✅ API応答受信（処理時間: ${elapsed}秒）`);
+
+    let revisedSection = result.response.text();
+    if (!revisedSection) {
+      throw new Error("修正結果が生成されませんでした");
+    }
+
+    // コードブロックマーカーを除去
+    revisedSection = revisedSection.replace(/^```html\s*/i, '').replace(/\s*```$/i, '').trim();
+
+    // <b>→<strong>変換
+    revisedSection = revisedSection
+      .replace(/<b>/gi, "<strong>")
+      .replace(/<\/b>/gi, "</strong>");
+
+    // セクションを結合して返す
+    const revisedFull = beforeSection + revisedSection + afterSection;
+    console.log(`✅ 記事H2セクション修正完了: 「${h2Heading}」`);
+    return revisedFull;
+  } catch (error) {
+    console.error('記事H2セクション修正エラー:', error);
+    throw new Error(`H2セクション「${h2Heading}」の修正に失敗しました`);
+  }
+}

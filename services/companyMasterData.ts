@@ -23,13 +23,13 @@ export const COMPANY_MASTER: Record<string, CompanyInfo> = {
   'アステックペイント': {
     fullName: '株式会社アステックペイント',
     displayName: 'アステックペイント',
-    industry: '工場営繕・改修工事',
+    industry: '外壁塗装・屋根塗装・防水工事・外装リフォーム',
     ceo: '',
     results: {
       before: '',
       after: '',
-      achievement: '施工実績 年間3000棟以上',
-      improvement: '遮熱効果により屋根の表面温度を約15℃程度抑え、室内温度も6.9℃低下'
+      achievement: '累計施工棟数128,000棟以上',
+      improvement: '厳しい5つの基準をクリアしたメーカー認定施工店の中からご紹介'
     },
     details:
       '遮熱塗料シェアNo.1の技術力と豊富な施工ノウハウを持つアステックペイントが運営',

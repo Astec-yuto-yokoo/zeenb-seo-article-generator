@@ -414,10 +414,11 @@ output_contract:
           </tr>
         </tbody>
       </table>
+      ※表のセル結合（rowspan/colspan）は使用禁止。同じ値が複数行に跨がる場合でも、各行すべてに同じ値を繰り返し記載すること。空セルにしない。
     【禁止事項】
     - マークダウン記法（#、##、*、-、|）の使用は一切禁止
     - コードブロック記法も禁止
-  length_control: "目標文字数が与えられた場合は±5%で寄せる。なければ適切な長文（目安8,000〜20,000字）"
+  length_control: "【執筆指示】セクションで指定された目標文字数を厳守すること（±10%以内）。超過は絶対に避ける"
   per_heading_requirements:
     - "冒頭2文で結論"
     - "数値/条件/手順のいずれかを含む"
@@ -540,6 +541,7 @@ interface WritingRequest {
   useCompanyData?: boolean; // 自社データを使うか
   useCurriculum?: boolean; // カリキュラムデータを使うか
   referenceMaterialContext?: string; // 参考資料テキスト（任意）
+  targetCharCount?: number; // 目標文字数（指定なしの場合デフォルト5500）
 }
 
 // 内部リンクマップを取得する関数（スプレッドシート由来）
@@ -869,7 +871,7 @@ ${request.referenceMaterialContext}
       model: "gemini-2.5-pro",
       generationConfig: {
         temperature: 0.7,
-        maxOutputTokens: 16384, // 20,000文字まで対応（8192→16384に増加）
+        maxOutputTokens: 8192, // 目標5000〜6000文字に合わせて制限
         topP: 0.9,
       },
     };
@@ -912,6 +914,10 @@ ${curriculumDataText}
 ${internalLinkText}
 ${primaryDataText}
 ${referenceMaterialText}
+【目標文字数（厳守）】
+記事全体で ${request.targetCharCount || 5500} 文字（±10%以内）。これを超えないこと。
+各セクションは簡潔にまとめ、冗長な表現や繰り返しを避けること。
+
 【執筆指示】
 上記の構成案とカスタムインストラクションに基づいて、SEOに最適化された記事を執筆してください。
 
@@ -1223,6 +1229,34 @@ function formatLeadQuotes(text: string): string {
 function formatHtmlQuotes(text: string): string {
   // 無効化：参考記事準拠
   return text;
+}
+
+/**
+ * WordPress Gutenberg テーブルブロック変換
+ * 素の <table> を <!-- wp:table --> + <figure class="wp-block-table"> で包む
+ */
+export function fixWordPressTableBlocks(text: string): string {
+  let fixed = text;
+
+  // 1. 既存の wp:table コメントと figure.wp-block-table ラッパーを除去（クリーンな状態から再構築）
+  fixed = fixed.replace(/<!--\s*wp:table(?:\s[^>]*)?\s*-->/gi, '');
+  fixed = fixed.replace(/<!--\s*\/wp:table\s*-->/gi, '');
+  fixed = fixed.replace(/<figure\s+class="wp-block-table[^"]*">\s*/gi, '');
+  fixed = fixed.replace(/\s*<\/figure>/gi, '');
+
+  // 2. すべての <table>...</table> を Gutenberg テーブルブロックに変換
+  fixed = fixed.replace(
+    /<table>([\s\S]*?)<\/table>/gi,
+    (match, content) => {
+      // テーブル内容が空なら変換しない
+      const trimmed = content.trim();
+      if (!trimmed) return match;
+
+      return '<!-- wp:table -->\n<figure class="wp-block-table"><table>' + content + '</table></figure>\n<!-- /wp:table -->';
+    }
+  );
+
+  return fixed;
 }
 
 // プレーンテキストで「」を改行処理（現在は未使用）

@@ -10,7 +10,7 @@ import {
   generateArticleV2,
   type WritingRegulationV2,
 } from "../services/articleWriterServiceV2";
-import { generateArticleV3 } from "../services/writingAgentV3";
+import { generateArticleV3, fixWordPressTableBlocks } from "../services/writingAgentV3";
 import { checkArticleV3 } from "../services/writingCheckerV3";
 import { proofreadArticle } from "../services/proofreadingAgent";
 import {
@@ -26,6 +26,7 @@ import type {
 import {
   reviseSpecificIssue,
   reviseBatchIssues,
+  reviseArticleH2Section,
 } from "../services/articleRevisionService";
 import { testArticle, testOutline } from "../testData/sampleArticle";
 import type { ProofreadingReport } from "../types/proofreading";
@@ -88,6 +89,9 @@ function cleanupArticleContent(content: string): string {
   cleaned = cleaned.replace(/(<br\s*\/?>(\s|&nbsp;)*)+(<h[23])/gi, "$3");
   // <ul>/<ol>/<li>タグを除去（古いエディタで崩れるため）
   cleaned = cleaned.replace(/<\/?(?:ul|ol|li)[^>]*>/gi, "");
+
+  // WordPress ブロックエディタ互換のテーブルHTML整形
+  cleaned = fixWordPressTableBlocks(cleaned);
 
   // 変更内容をログ出力
   const asteriskCount = (content.match(/\*/g) || []).length;
@@ -194,6 +198,68 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
   const [multiAgentResult, setMultiAgentResult] =
     useState<IntegrationResult | null>(null);
 
+  // H2ブロック単位修正用state
+  const [h2RevisionPrompts, setH2RevisionPrompts] = useState<Record<string, string>>({});
+  const [h2Revising, setH2Revising] = useState<string | null>(null);
+  const [h2RevisionError, setH2RevisionError] = useState<string | null>(null);
+  const [showH2RevisionPanel, setShowH2RevisionPanel] = useState(false);
+
+  // editedContentからH2見出しを抽出するヘルパー
+  const extractH2Headings = (html: string): string[] => {
+    const headings: string[] = [];
+    const regex = /<h2[^>]*>([\s\S]*?)<\/h2>/gi;
+    let m;
+    while ((m = regex.exec(html)) !== null) {
+      const text = m[1].replace(/<[^>]*>/g, '').trim();
+      if (text) headings.push(text);
+    }
+    return headings;
+  };
+
+  // H2セクション修正ハンドラ
+  const handleReviseH2Section = async (h2Heading: string) => {
+    const prompt = h2RevisionPrompts[h2Heading];
+    if (!prompt || !prompt.trim()) return;
+
+    setH2Revising(h2Heading);
+    setH2RevisionError(null);
+
+    try {
+      const kw = outline && outline.keyword ? outline.keyword : (outline && 'searchIntent' in outline ? keyword : keyword);
+      const revisedHtml = await reviseArticleH2Section(editedContent, h2Heading, prompt.trim(), kw);
+
+      // WordPress整形
+      const { fixWordPressListBlocks } = await import('../services/writingAgentV3');
+      let cleaned = fixWordPressListBlocks(revisedHtml);
+      cleaned = fixWordPressTableBlocks(cleaned);
+
+      setEditedContent(cleaned);
+      if (article) {
+        const updatedArticle = {
+          ...article,
+          htmlContent: cleaned,
+          plainText: cleaned.replace(/<[^>]*>/g, ''),
+        };
+        setArticle(updatedArticle);
+        if (onArticleGenerated) {
+          onArticleGenerated(updatedArticle);
+        }
+      }
+
+      // 成功したらプロンプトをクリア
+      setH2RevisionPrompts(prev => {
+        const next = { ...prev };
+        delete next[h2Heading];
+        return next;
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '修正に失敗しました';
+      setH2RevisionError(`「${h2Heading}」: ${msg}`);
+    } finally {
+      setH2Revising(null);
+    }
+  };
+
   // multiAgentResultの変更を監視
   useEffect(() => {
     console.log(
@@ -278,6 +344,11 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
         );
 
         // Ver.3エージェントで生成
+        // 目標文字数: characterCountAnalysis があればその値、なければ5500文字
+        const targetChars = actualOutline.characterCountAnalysis
+          ? Math.min(actualOutline.characterCountAnalysis.average, 6000)
+          : 5500;
+
         const v3Result = await generateArticleV3({
           outline: outlineMarkdown,
           keyword: keyword,
@@ -285,6 +356,7 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
           tone: "professional",
           useGrounding: true, // Grounding機能有効（最新情報を検索しながら執筆）
           referenceMaterialContext: referenceMaterialContext,
+          targetCharCount: targetChars,
         });
 
         // 一時的に保存（チェック後にクリーンアップするため）
@@ -2455,7 +2527,7 @@ ${
                       </p>
                     </div>
                     <div
-                      className="prose prose-lg max-w-none
+                      className="prose prose-lg max-w-none article-content
                         prose-h2:text-2xl prose-h2:font-bold prose-h2:text-blue-900 prose-h2:mt-8 prose-h2:mb-4 prose-h2:pb-2 prose-h2:border-b-2 prose-h2:border-blue-200
                         prose-h3:text-xl prose-h3:font-bold prose-h3:text-blue-700 prose-h3:mt-6 prose-h3:mb-3
                         prose-p:text-gray-700 prose-p:leading-relaxed
@@ -2463,6 +2535,52 @@ ${
                         prose-ul:my-4 prose-li:my-1"
                       dangerouslySetInnerHTML={{ __html: editedContent }}
                     />
+
+                    {/* H2ブロック単位修正パネル */}
+                    <div className="mt-6 border-t border-gray-200 pt-4">
+                      <button
+                        onClick={() => setShowH2RevisionPanel(!showH2RevisionPanel)}
+                        className="w-full px-4 py-3 flex items-center justify-between text-left bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+                      >
+                        <span className="text-sm font-semibold text-gray-700">
+                          🔧 H2セクション単位で修正
+                        </span>
+                        <span className="text-gray-400 text-xs">
+                          {showH2RevisionPanel ? '▲ 閉じる' : '▼ 開く'}
+                        </span>
+                      </button>
+                      {showH2RevisionPanel && (
+                        <div className="mt-3 space-y-3">
+                          {h2RevisionError && (
+                            <p className="text-sm text-red-500 bg-red-50 p-2 rounded">{h2RevisionError}</p>
+                          )}
+                          {extractH2Headings(editedContent).map((heading, idx) => (
+                            <div key={idx} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                              <p className="text-sm font-semibold text-blue-800 mb-2">
+                                H2-{idx + 1}: {heading}
+                              </p>
+                              <div className="flex gap-2">
+                                <textarea
+                                  value={h2RevisionPrompts[heading] || ''}
+                                  onChange={(e) => setH2RevisionPrompts(prev => ({ ...prev, [heading]: e.target.value }))}
+                                  placeholder="修正指示を入力..."
+                                  className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                                  rows={2}
+                                  disabled={h2Revising === heading}
+                                />
+                                <button
+                                  onClick={() => handleReviseH2Section(heading)}
+                                  disabled={h2Revising === heading || !h2RevisionPrompts[heading] || !(h2RevisionPrompts[heading] || '').trim()}
+                                  className="self-end px-4 py-2 text-sm font-semibold text-white bg-blue-500 rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                                >
+                                  {h2Revising === heading ? '修正中...' : 'AI修正'}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   // コードモード
