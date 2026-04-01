@@ -316,6 +316,67 @@ CONSTRAINTS:
 - For outdoor scenes, always use clear blue sky or bright daylight, NEVER overcast or cloudy.
 - White balance should be neutral to slightly warm.
 
+CONSTRUCTION & PAINTING SITE SAFETY RULES (MANDATORY for any scene involving building exteriors, scaffolding, painting, washing, or renovation — based on Astec Safety & Compliance Guide):
+
+=== SCAFFOLDING (足場) ===
+1. TYPE: Use "kusabi (vike) scaffolding" — interlocking wedge-type scaffolding commonly used in Japanese residential renovation. For buildings wider than 1m work area, use "hon-ashiba" (double-row scaffolding) with two rows of vertical posts for maximum stability.
+2. COVERAGE: Scaffolding MUST fully enclose the entire building facade from ground level to at least 1 meter ABOVE the eaves/roofline. No partial scaffolding — every wall face being worked on must be fully covered.
+3. SAFETY FEATURES: Handrails at 85cm or higher on all working platforms, plus mid-rails. Toe boards at least 10cm high at the base of each platform. Diagonal cross-bracing between vertical posts.
+4. WORK PLATFORM: Clean and clear — no paint cans, tools, or materials left on the scaffolding floor.
+
+=== SPLASH PREVENTION SHEETS (飛散防止シート) ===
+5. For ANY pressure washing or painting scene, the ENTIRE scaffolding must be wrapped in gray or white mesh splash-prevention sheets.
+6. Sheet requirements: All grommet ties securely fastened with NO gaps between sheets. Sheets extend from nearly ground level up to at least 1 meter above the eaves. No loose or flapping sections.
+7. For airless spray painting, use DOUBLE-LAYER sheets.
+
+=== HARNESS & FALL PROTECTION (墜落制止用器具) ===
+8. Workers at ANY height on scaffolding MUST wear a full-body harness — NOT an old-style waist belt.
+9. Full-body harness components: shoulder straps over both shoulders, chest strap, leg loops around both thighs, dorsal D-ring on upper back.
+10. Lanyard MUST be visibly connected from the dorsal D-ring to an anchor point ABOVE the worker's head. Never dangling loose, never attached at waist level.
+
+=== WORKER ATTIRE (安全な服装) ===
+11. HELMET: SG-rated safety helmet with chin strap securely fastened under the chin. No towels wrapped under the helmet.
+12. CLOTHING: Long-sleeved uniform — short sleeves and rolled-up sleeves are prohibited. Shirt tucked into pants. Pants fitted properly with belt at waist — no baggy or oversized clothing. No accessories such as watches or bracelets.
+13. FOOTWEAR: Safety shoes or tabi-style work shoes. No sandals or loose footwear.
+14. GLOVES: Work gloves on both hands.
+
+=== GROUND SAFETY ===
+15. Entry prohibition signs or caution tape around the scaffolding perimeter to prevent residents and pedestrians from entering the work zone.
+
+NEGATIVE PROMPT (absolutely NEVER generate these):
+- Scaffolding that covers only part of the building or stops below the roofline
+- Scaffolding without splash-prevention mesh sheets during washing or painting
+- Gaps or loose sections in splash-prevention sheets
+- Workers without full-body harness on scaffolding
+- Waist-only safety belts — these are outdated and prohibited
+- Harness lanyards hanging loose or not connected to anchor points
+- Workers with bare arms, rolled-up sleeves, or short sleeves
+- Shirts not tucked into pants
+- Workers without chin straps fastened on helmets
+- Paint cans or tools scattered on scaffolding platforms
+- Pedestrians or residents walking under or near scaffolding without barriers
+- Harness straps that fade into or blend with clothing
+
+ANTI-HALLUCINATION RULES (critical for accuracy):
+- If you cannot confidently depict a specific safety detail (e.g., harness D-ring, lanyard anchor connection), zoom OUT to a wider shot where that detail becomes a small part of the overall scene rather than attempting a close-up that may be inaccurate.
+- ALWAYS default to the SAFEST and SIMPLEST depiction: a fully mesh-wrapped building seen from a distance is always better than a close-up with incorrect harness details.
+- Use COLOR CONTRAST to ensure safety gear is visible: bright-colored harness straps (orange or yellow) against dark blue uniforms, white helmets against any background.
+- Treat each safety rule as a HARD CONSTRAINT, not a suggestion. If a rule conflicts with artistic composition, the safety rule wins.
+- When depicting scaffolding, show it as a UNIFORM GRID pattern covering the building — do not attempt to show individual pipe joints or connectors, as these are prone to hallucination.
+- For splash-prevention sheets, depict them as a CONTINUOUS FLAT SURFACE with no visible building behind them — this is easier to render accurately than semi-transparent mesh.
+
+COMPOSITION GUIDANCE FOR CONSTRUCTION SCENES:
+- Prefer WIDE-ANGLE shots (24mm-35mm) showing the full building with complete scaffolding and sheet coverage from ground to above roofline.
+- When workers are the subject, frame from MEDIUM DISTANCE so the full harness including shoulder straps, leg loops, and lanyard connection to overhead anchor is clearly visible.
+- Use EYE-LEVEL or SLIGHTLY ELEVATED angles. Avoid low-angle shots looking up — they hide harness details.
+- If accurate scaffolding or harness detail is difficult, prefer a DISTANT VIEW where the mesh-covered scaffolding is the dominant visual element.
+
+SIMPLIFICATION RULES:
+- Maximum 2 workers visible. Fewer workers means more accurate safety gear depiction.
+- For detailed harness scenes, show only 1 worker with harness straps in a contrasting color against the uniform.
+- When in doubt, choose a simpler composition such as a fully mesh-wrapped building exterior over a complex close-up worker scene.
+- Avoid depicting workers mid-action with complex poses — static standing poses are easier to render with correct safety gear.
+
 Heading: "${h2Text}"
 Paragraph: "${paragraphText}"
 
