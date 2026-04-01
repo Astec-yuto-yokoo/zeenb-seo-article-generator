@@ -10,6 +10,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { companyDataService } from "./companyDataService";
 import { curriculumDataService } from "./curriculumDataService";
 import { getContextForKeywords, isSupabaseAvailable } from "./primaryDataService";
+import type { ImageAsset } from "./boxImageService";
+import { buildImageContext } from "./contextBuilder";
 // latestAIModelsは汎用化のため削除
 
 const API_KEY =
@@ -415,6 +417,12 @@ output_contract:
         </tbody>
       </table>
       ※表のセル結合（rowspan/colspan）は使用禁止。同じ値が複数行に跨がる場合でも、各行すべてに同じ値を繰り返し記載すること。空セルにしない。
+    - 画像（BOX素材がある場合のみ）:
+      <figure>
+        <img src="画像URL" alt="説明文">
+        <figcaption>説明文</figcaption>
+      </figure>
+      ※画像は必要な場合のみ使用。各H2セクションにつき最大1枚まで。
     【禁止事項】
     - マークダウン記法（#、##、*、-、|）の使用は一切禁止
     - コードブロック記法も禁止
@@ -542,6 +550,7 @@ interface WritingRequest {
   useCurriculum?: boolean; // カリキュラムデータを使うか
   referenceMaterialContext?: string; // 参考資料テキスト（任意）
   targetCharCount?: number; // 目標文字数（指定なしの場合デフォルト5500）
+  imageAssets?: ImageAsset[]; // BOX画像アセット（任意）
 }
 
 // 内部リンクマップを取得する関数（スプレッドシート由来）
@@ -788,7 +797,7 @@ ${relevantData
 
 ■ 挿入ルール：
 1. 挿入位置: 本文中の関連キーワード・フレーズに自然にリンクを設置する
-2. 挿入形式: <a href="URL" target="_blank" rel="noopener">アンカーテキスト</a>
+2. 挿入形式: <a href="[上記リストから選んだ実際のURL]" target="_blank" rel="noopener">アンカーテキスト</a>
    アンカーテキストは文脈に合わせて自然な日本語フレーズを使う（URLそのままは禁止）
 3. 判定基準: 「この段落の話題をより詳しく解説しているページか？」
 4. 挿入数: 1記事あたり3〜7個（過剰リンクは避ける）
@@ -802,6 +811,7 @@ ${relevantData
 ${linkList}
 
 重要：上記リスト内のURLのみを使用すること。存在しないURLは絶対に挿入しないこと。
+「href="URL"」「href="[URL]"」のような文字通りのプレースホルダーは絶対に出力禁止。関連するURLがリストにない場合はリンク自体を省略すること。
 `;
         const linkTime = ((Date.now() - linkStartTime) / 1000).toFixed(1);
         console.log(
@@ -866,6 +876,16 @@ ${request.referenceMaterialContext}
       console.log("⏭️ [1.8/4] スキップ: 参考資料なし");
     }
 
+    // BOX画像コンテキストの注入
+    let imageContextText = "";
+    if (request.imageAssets && request.imageAssets.length > 0) {
+      console.log(`\n🖼️ [1.9/4] BOX画像コンテキスト注入中... (${request.imageAssets.length}件)`);
+      imageContextText = buildImageContext(request.imageAssets);
+      console.log(`✅ [1.9/4] 完了: BOX画像コンテキスト注入`);
+    } else {
+      console.log("⏭️ [1.9/4] スキップ: BOX画像なし");
+    }
+
     // モデル設定
     const modelConfig: any = {
       model: "gemini-2.5-pro",
@@ -914,6 +934,7 @@ ${curriculumDataText}
 ${internalLinkText}
 ${primaryDataText}
 ${referenceMaterialText}
+${imageContextText}
 【目標文字数（厳守）】
 記事全体で ${request.targetCharCount || 5500} 文字（±10%以内）。これを超えないこと。
 各セクションは簡潔にまとめ、冗長な表現や繰り返しを避けること。

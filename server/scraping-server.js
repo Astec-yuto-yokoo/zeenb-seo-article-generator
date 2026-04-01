@@ -1071,6 +1071,10 @@ app.delete("/api/reference-materials/:id", handleDelete);
 
 // リンクチェック・出典検証機能は撤去済み（出典はテキストのみ、リンクなし）
 
+// BOX画像取得APIエンドポイント
+const { getBoxImages } = require("./api/box-images.js");
+app.get("/api/box-images", getBoxImages);
+
 // Slack通知プロキシエンドポイント（CORSを回避）
 app.post("/api/slack-notify", async (req, res) => {
   const { message } = req.body;

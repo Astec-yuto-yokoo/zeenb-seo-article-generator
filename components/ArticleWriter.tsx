@@ -11,6 +11,7 @@ import {
   type WritingRegulationV2,
 } from "../services/articleWriterServiceV2";
 import { generateArticleV3, fixWordPressTableBlocks } from "../services/writingAgentV3";
+import { fetchBoxImages } from "../services/boxImageService";
 import { checkArticleV3 } from "../services/writingCheckerV3";
 import { proofreadArticle } from "../services/proofreadingAgent";
 import {
@@ -349,6 +350,14 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
           ? Math.min(actualOutline.characterCountAnalysis.average, 6000)
           : 5500;
 
+        // BOX画像アセットを取得（失敗しても記事生成は続行）
+        setProgress("BOX画像素材を取得中...");
+        const boxImages = await fetchBoxImages();
+        if (boxImages.length > 0) {
+          console.log(`🖼️ BOX画像 ${boxImages.length}件を取得`);
+        }
+
+        setProgress("Ver.3モード（Gemini Pro + Grounding）で記事を生成中...");
         const v3Result = await generateArticleV3({
           outline: outlineMarkdown,
           keyword: keyword,
@@ -357,6 +366,7 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
           useGrounding: true, // Grounding機能有効（最新情報を検索しながら執筆）
           referenceMaterialContext: referenceMaterialContext,
           targetCharCount: targetChars,
+          imageAssets: boxImages.length > 0 ? boxImages : undefined,
         });
 
         // 一時的に保存（チェック後にクリーンアップするため）
