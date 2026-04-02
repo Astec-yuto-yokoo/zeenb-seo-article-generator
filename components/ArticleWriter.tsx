@@ -351,13 +351,13 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
           : 5500;
 
         // BOX画像アセットを取得（失敗しても記事生成は続行）
-        setProgress("BOX画像素材を取得中...");
+        setGenerationProgress("BOX画像素材を取得中...");
         const boxImages = await fetchBoxImages();
         if (boxImages.length > 0) {
           console.log(`🖼️ BOX画像 ${boxImages.length}件を取得`);
         }
 
-        setProgress("Ver.3モード（Gemini Pro + Grounding）で記事を生成中...");
+        setGenerationProgress("Ver.3モード（Gemini Pro + Grounding）で記事を生成中...");
         const v3Result = await generateArticleV3({
           outline: outlineMarkdown,
           keyword: keyword,
