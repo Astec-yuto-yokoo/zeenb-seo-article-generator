@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { SeoOutlineV2, OutlineSectionV2 } from '../types';
 import { countCharacters } from '../utils/characterCounter';
-import { reviseOutlineSection } from '../services/outlineGeneratorV2';
+import { reviseOutlineSection, reviseFullOutline } from '../services/outlineGeneratorV2';
 import {
   TitleIcon,
   TargetIcon,
@@ -42,6 +42,9 @@ const OutlineDisplayV2: React.FC<OutlineDisplayV2Props> = ({ outline, keyword, o
   const [revisionPrompts, setRevisionPrompts] = useState<Record<number, string>>({});
   const [revisingSection, setRevisingSection] = useState<number | null>(null);
   const [revisionError, setRevisionError] = useState<string | null>(null);
+  const [fullRevisionPrompt, setFullRevisionPrompt] = useState('');
+  const [isRevisingFull, setIsRevisingFull] = useState(false);
+  const [fullRevisionError, setFullRevisionError] = useState<string | null>(null);
 
   const handleReviseSection = async (sectionIndex: number) => {
     const prompt = revisionPrompts[sectionIndex];
@@ -69,6 +72,31 @@ const OutlineDisplayV2: React.FC<OutlineDisplayV2Props> = ({ outline, keyword, o
       setRevisionError(`H2-${sectionIndex + 1}: ${msg}`);
     } finally {
       setRevisingSection(null);
+    }
+  };
+
+  const handleReviseFullOutline = async () => {
+    if (!fullRevisionPrompt.trim() || !onOutlineUpdate) return;
+
+    setIsRevisingFull(true);
+    setFullRevisionError(null);
+
+    try {
+      const revisedOutline = await reviseFullOutline(outline, fullRevisionPrompt.trim(), keyword);
+      onOutlineUpdate(revisedOutline);
+      setFullRevisionPrompt('');
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '構成案の修正に失敗しました';
+      setFullRevisionError(msg);
+    } finally {
+      setIsRevisingFull(false);
+    }
+  };
+
+  const handleFullRevisionKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      handleReviseFullOutline();
     }
   };
 
@@ -389,6 +417,46 @@ ${outline.competitorComparison.differentiators.map((diff, i) => `  ${i + 1}) ${d
           ))}
         </div>
       </Card>
+
+      {/* 構成案全体の余白（フローティングUIと被らないように） */}
+      {onOutlineUpdate && <div className="h-28" />}
+
+      {/* フローティング：構成案全体修正 */}
+      {onOutlineUpdate && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-t border-gray-300 shadow-[0_-4px_12px_rgba(0,0,0,0.1)] px-4 py-3">
+          <div className="max-w-4xl mx-auto">
+            {fullRevisionError && (
+              <p className="text-sm text-red-500 mb-2">{fullRevisionError}</p>
+            )}
+            <div className="flex gap-3 items-end">
+              <textarea
+                value={fullRevisionPrompt}
+                onChange={(e) => setFullRevisionPrompt(e.target.value)}
+                onKeyDown={handleFullRevisionKeyDown}
+                placeholder="構成案全体への修正指示を入力（例：H2を1つ追加して、○○の内容を盛り込んで）… Ctrl+Enterで送信"
+                className="flex-1 px-4 py-2.5 text-sm border border-gray-300 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                rows={2}
+                disabled={isRevisingFull}
+              />
+              <button
+                onClick={handleReviseFullOutline}
+                disabled={isRevisingFull || !fullRevisionPrompt.trim()}
+                className="px-6 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-indigo-500 to-blue-500 rounded-xl hover:from-indigo-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap shadow-sm"
+              >
+                {isRevisingFull ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    修正中...
+                  </span>
+                ) : '構成案を修正'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

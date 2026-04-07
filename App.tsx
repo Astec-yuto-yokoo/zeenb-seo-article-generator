@@ -376,6 +376,8 @@ const App: React.FC = () => {
       setKeyword(newKeyword);
       setIsV2Mode(false);
       setApiUsageWarning(null);
+      setGeneratedArticle(null);
+      setShowArticleWriter(false);
 
       try {
         // API使用回数のチェックと警告
@@ -470,6 +472,8 @@ const App: React.FC = () => {
       setKeyword(newKeyword);
       setIsV2Mode(true);
       setApiUsageWarning(null);
+      setGeneratedArticle(null);
+      setShowArticleWriter(false);
 
       try {
         // API使用回数のチェックと警告

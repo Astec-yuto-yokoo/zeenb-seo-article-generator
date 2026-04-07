@@ -913,7 +913,7 @@ ${referenceMaterialContext}
     
     // H3の「0 or 2以上」ルールを適用（1個の場合は0個にする）
     const adjustedOutline: OutlineSectionV2[] = generatedData.outline.map((section: any, index: number) => {
-      const h3Count = section.subheadings?.length || 0;
+      const h3Count = section.subheadings && section.subheadings.length ? section.subheadings.length : 0;
       
       // まとめ見出しの判定（最後の見出し、または「まとめ」を含む）
       const isLastSection = index === generatedData.outline.length - 1;
@@ -934,14 +934,36 @@ ${referenceMaterialContext}
         ? generateConcreteImageSuggestion(section.heading, searchIntent.primary)
         : '';
       
+      // writingNoteが空の場合、見出し・H3情報からフォールバック値を生成
+      let writingNote = section.writingNote || '';
+      if (!writingNote) {
+        const h3Texts = adjustedSubheadings.map((sub: any) => sub.text).filter(Boolean);
+        if (h3Texts.length > 0) {
+          writingNote = `「${section.heading}」について、${h3Texts.join('、')}の観点から解説する`;
+        } else {
+          writingNote = `「${section.heading}」について、${keyword}に関連する情報を網羅的に解説する`;
+        }
+        console.warn(`⚠️ writingNote空 → フォールバック生成: H2「${section.heading}」`);
+      }
+
+      // H3のwritingNoteが空の場合もフォールバック生成
+      const subheadingsWithNote = adjustedSubheadings.map((sub: any) => {
+        if (!sub.writingNote) {
+          const fallbackNote = `「${sub.text}」について具体的に解説する`;
+          console.warn(`⚠️ H3 writingNote空 → フォールバック生成: 「${sub.text}」`);
+          return { ...sub, writingNote: fallbackNote };
+        }
+        return sub;
+      });
+
       return {
         heading: section.heading,
-        subheadings: adjustedSubheadings,
+        subheadings: subheadingsWithNote,
         imageSuggestion,
-        writingNote: section.writingNote || ''
+        writingNote
       };
     });
-    
+
     // H3の総数をチェック
     const currentH3Total = adjustedOutline.reduce((sum, section) => sum + section.subheadings.length, 0);
     
@@ -998,6 +1020,105 @@ ${referenceMaterialContext}
  * H2ブロック単位で構成案を修正する
  * ユーザーのプロンプト指示に基づき、指定H2セクションのみをGeminiで修正
  */
+export async function reviseFullOutline(
+  outline: SeoOutlineV2,
+  userPrompt: string,
+  keyword: string
+): Promise<SeoOutlineV2> {
+  console.log('🔧 構成案全体修正開始');
+  console.log('📝 修正指示:', userPrompt);
+
+  const currentOutlineText = outline.outline.map((s, i) => {
+    const h3List = s.subheadings.length > 0
+      ? s.subheadings.map((sub, j) => `    H3-${j + 1}: ${sub.text}（メモ: ${sub.writingNote || 'なし'}）`).join('\n')
+      : '    （H3なし）';
+    return `H2-${i + 1}: ${s.heading}\n  執筆メモ: ${s.writingNote}\n  画像提案: ${s.imageSuggestion}\n${h3List}`;
+  }).join('\n\n');
+
+  const prompt = `あなたはSEO記事構成の専門家です。以下の構成案全体をユーザーの指示に基づいて修正してください。
+
+【キーワード】
+${keyword}
+
+【タイトル】
+${outline.title}
+
+【ターゲット読者】
+${outline.targetAudience}
+
+【現在の構成案】
+${currentOutlineText}
+
+【ユーザーの修正指示】
+${userPrompt}
+
+【絶対厳守ルール】
+- タイトル: 29〜35文字（32文字前後が理想）。自社サービス名・【】記号を含めない
+- H2見出し: 【】等記号で囲まない
+- H3配分: H2ごとに「0個」または「2個以上」（1個は禁止）
+- 「○選」等の数字があればH3はその数と同数で通し番号を付ける
+- 最後3つのH2は以下の固定順序:
+  1. FAQ・よくある質問（任意）
+  2. 自社サービス訴求（必須・H3を2〜3個）
+  3. まとめ（必須・H3は0個）— 形式:「まとめ：[キーワード]を含む総括的なサブタイトル」
+
+【出力ルール】
+- 修正指示に従って構成案全体を修正したJSONを返す
+- H2の追加・削除・並び替えも可能
+- 以下のJSON形式で返すこと（これ以外のテキストは出力しない）
+
+{
+  "title": "修正後のタイトル",
+  "outline": [
+    {
+      "heading": "H2見出し",
+      "subheadings": [
+        { "text": "H3見出し", "writingNote": "執筆メモ" }
+      ],
+      "imageSuggestion": "画像提案",
+      "writingNote": "H2の執筆メモ（最大200字）"
+    }
+  ]
+}`;
+
+  try {
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-pro",
+      generationConfig: {
+        temperature: 0.4,
+        maxOutputTokens: 8000,
+        responseMimeType: "application/json"
+      }
+    });
+
+    const result = await model.generateContent(prompt);
+    let responseText = result.response.text();
+    responseText = responseText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+
+    const revised = JSON.parse(responseText) as { title: string; outline: OutlineSectionV2[] };
+
+    // H3が1個の場合は0個に調整
+    for (const section of revised.outline) {
+      if (section.subheadings && section.subheadings.length === 1) {
+        console.warn('⚠️ H3が1個 → 0個に調整:', section.heading);
+        section.subheadings = [];
+      }
+    }
+
+    const updatedOutline: SeoOutlineV2 = {
+      ...outline,
+      title: revised.title || outline.title,
+      outline: revised.outline
+    };
+
+    console.log('✅ 構成案全体修正完了: H2数=' + revised.outline.length);
+    return updatedOutline;
+  } catch (error) {
+    console.error('構成案全体修正エラー:', error);
+    throw new Error('構成案の全体修正に失敗しました');
+  }
+}
+
 export async function reviseOutlineSection(
   outline: SeoOutlineV2,
   sectionIndex: number,
