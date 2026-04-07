@@ -19,7 +19,6 @@ interface OutlineDisplayV2Props {
   keyword: string;
   onOutlineUpdate?: (updatedOutline: SeoOutlineV2) => void; // 構成案更新コールバック
   onStartWriting?: () => void; // Ver.2執筆
-  onStartWritingV1?: () => void; // Ver.1執筆
   onStartWritingV3?: () => void; // Ver.3執筆（Gemini Pro + Grounding）
 }
 
@@ -37,7 +36,7 @@ const Card: React.FC<{ icon: React.ReactNode; title: string; children: React.Rea
   </div>
 );
 
-const OutlineDisplayV2: React.FC<OutlineDisplayV2Props> = ({ outline, keyword, onOutlineUpdate, onStartWriting, onStartWritingV1, onStartWritingV3 }) => {
+const OutlineDisplayV2: React.FC<OutlineDisplayV2Props> = ({ outline, keyword, onOutlineUpdate, onStartWriting, onStartWritingV3 }) => {
   const [copyButtonText, setCopyButtonText] = useState('Markdownコピー');
   const [revisionPrompts, setRevisionPrompts] = useState<Record<number, string>>({});
   const [revisingSection, setRevisingSection] = useState<number | null>(null);
@@ -202,14 +201,6 @@ ${outline.competitorComparison.differentiators.map((diff, i) => `  ${i + 1}) ${d
             <ClipboardIcon className="w-5 h-5" />
             {copyButtonText}
           </button>
-          {onStartWritingV1 && (
-            <button
-              onClick={onStartWritingV1}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold rounded-xl hover:from-blue-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 ease-in-out text-sm shadow-sm"
-            >
-              執筆開始（Ver.1）
-            </button>
-          )}
           {onStartWritingV3 && (
             <button
               onClick={onStartWritingV3}

@@ -1,11 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import type { SeoOutline, SeoOutlineV2, SubheadingWithNote } from "../types";
 import {
-  generateArticle,
   regenerateSection,
-  type WritingRegulation,
 } from "../services/articleWriterService";
-import { generateArticleBySection } from "../services/sectionBasedArticleWriter";
 import {
   generateArticleV2,
   type WritingRegulationV2,
@@ -118,7 +115,7 @@ interface ArticleWriterProps {
   outline: SeoOutline | SeoOutlineV2; // Ver.1とVer.2両方の構成を受け付ける
   keyword: string;
   onClose: () => void;
-  writingMode?: "v1" | "v2" | "v3"; // 執筆モード（Ver.3追加）
+  writingMode?: "v2" | "v3"; // 執筆モード（Ver.3追加）
   testMode?: boolean; // テストモード（最終校閲テスト用）
   revisionTestMode?: boolean; // 修正サービステストモード
   onArticleGenerated?: (article: {
@@ -144,7 +141,7 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
   outline,
   keyword,
   onClose,
-  writingMode = "v1",
+  writingMode = "v3",
   testMode = false,
   revisionTestMode = false,
   onArticleGenerated,
@@ -185,9 +182,6 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
   const [regeneratingSection, setRegeneratingSection] = useState<string | null>(
     null
   );
-  const [generationMethod, setGenerationMethod] = useState<
-    "standard" | "section"
-  >("section"); // デフォルトをセクション単位に
   const [generationProgress, setGenerationProgress] = useState<string>("");
   const [proofreadingReport, setProofreadingReport] =
     useState<ProofreadingReport | null>(null);
@@ -415,39 +409,9 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
           `📊 Ver.2生成完了: ${v2Result.characterCount}文字（指示タグ除外）`
         );
       }
-      // Ver.1モード（従来版）
-      else if (generationMethod === "section") {
-        // セクション単位で生成
-        setGenerationProgress("セクション単位で記事を生成中...");
-        const sectionResult = await generateArticleBySection(
-          outline,
-          keyword,
-          regulation
-        );
 
-        // セクション統計情報をコンソールに表示
-        if (sectionResult.sectionStats) {
-          console.log("📊 セクション別文字数統計:");
-          sectionResult.sectionStats.forEach((stat) => {
-            const rate = Math.round(
-              (stat.actualChars / stat.targetChars) * 100
-            );
-            console.log(
-              `  ${stat.sectionName}: ${stat.actualChars}/${stat.targetChars}文字 (${rate}%)`
-            );
-          });
-        }
-
-        generatedArticle = {
-          title: sectionResult.title,
-          metaDescription: sectionResult.metaDescription,
-          htmlContent: sectionResult.htmlContent,
-          plainText: sectionResult.plainText,
-        };
-      } else {
-        // 従来の一括生成
-        setGenerationProgress("記事を一括生成中...");
-        generatedArticle = await generateArticle(outline, keyword, regulation);
+      if (!generatedArticle) {
+        throw new Error("記事の生成に失敗しました。");
       }
 
       // proofreadingInfoを除外してsetArticle用のオブジェクトを作成

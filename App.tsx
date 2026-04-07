@@ -70,7 +70,7 @@ const App: React.FC = () => {
     plainText: string;
   } | null>(null);
   const [showArticleWriter, setShowArticleWriter] = useState(false);
-  const [writingMode, setWritingMode] = useState<"v1" | "v2" | "v3">("v1");
+  const [writingMode, setWritingMode] = useState<"v2" | "v3">("v3");
   const [isV2Mode, setIsV2Mode] = useState<boolean>(false);
 
   // フル自動モード用の状態
@@ -1695,15 +1695,6 @@ const App: React.FC = () => {
                     outline={outlineV2}
                     keyword={keyword}
                     onOutlineUpdate={(updatedOutline) => setOutlineV2(updatedOutline)}
-                    onStartWritingV1={() => {
-                      setWritingMode("v1");
-                      setShowArticleWriter(true);
-                    }}
-                    // Ver.2ボタンは非表示
-                    // onStartWriting={() => {
-                    //   setWritingMode('v2');
-                    //   setShowArticleWriter(true);
-                    // }}
                     onStartWritingV3={() => {
                       setWritingMode("v3");
                       setShowArticleWriter(true);
