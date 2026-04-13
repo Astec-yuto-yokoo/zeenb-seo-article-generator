@@ -281,45 +281,187 @@ Background Suggestion:`;
   });
 };
 
+// ============================================================
+// ビジュアルカテゴリ分類システム（改善案A + D）
+// H2テーマに応じて異なるビジュアルを生成し、単調さを排除する
+// ============================================================
+
+type VisualCategory =
+  | "construction-site"  // 塗装工事・足場・施工現場
+  | "building-exterior"  // 建物外観・劣化・屋根・外壁
+  | "consultation"       // 相談・打合せ・専門家アドバイス
+  | "data-analysis"      // 費用・相場・比較・統計
+  | "checklist"          // 注意点・確認事項・契約
+  | "product"            // 製品・塗料・性能・素材
+  | "lifestyle"          // 暮らし・快適・入居者生活
+  | "concept";           // まとめ・メリット・ポイント・抽象
+
+interface CategoryRule {
+  category: VisualCategory;
+  keywords: string[];
+  /** 高優先キーワード: 1つでもマッチすればこのカテゴリ確定 */
+  strongKeywords?: string[];
+}
+
+const CATEGORY_RULES: CategoryRule[] = [
+  {
+    category: "construction-site",
+    strongKeywords: ["足場", "高圧洗浄", "施工中", "養生", "飛散防止", "葺き替え"],
+    keywords: ["塗装工事", "施工", "工事中", "下塗り", "上塗り", "中塗り", "吹付", "ローラー", "職人", "作業員", "塗り替え工事", "塗装手順", "施工手順", "工事の流れ", "施工事例"],
+  },
+  {
+    category: "building-exterior",
+    strongKeywords: ["劣化", "ひび割れ", "クラック", "チョーキング", "色褪せ", "雨漏り", "剥がれ", "外壁診断", "屋根診断"],
+    keywords: ["外壁", "屋根", "外観", "外装", "修繕", "防水", "サイディング", "モルタル", "コーキング", "シーリング", "遮熱", "断熱", "塗膜", "築年数"],
+  },
+  {
+    category: "product",
+    strongKeywords: ["塗料", "シリコン", "フッ素", "無機", "ウレタン", "遮熱塗料"],
+    keywords: ["製品", "性能", "耐久性", "耐候性", "塗膜", "下地", "プライマー", "トップコート", "水性", "油性", "艶"],
+  },
+  {
+    category: "data-analysis",
+    strongKeywords: ["相場", "見積", "費用一覧"],
+    keywords: ["費用", "価格", "コスト", "単価", "坪単価", "手数料", "料金", "予算", "比較表", "統計", "データ", "推移", "平均", "年数", "耐用年数"],
+  },
+  {
+    category: "checklist",
+    strongKeywords: ["注意点", "要確認", "チェックリスト"],
+    keywords: ["確認", "契約", "トラブル", "失敗", "リスク", "違約", "クレーム", "保証", "保険", "法律", "規約", "届出", "許可"],
+  },
+  {
+    category: "consultation",
+    keywords: ["選び方", "相談", "比較", "検討", "依頼", "業者", "見極め", "探し方", "選定", "判断", "ポイント", "基準", "提案", "専門家", "アドバイス", "報告", "担当者", "レスポンス", "対応"],
+  },
+  {
+    category: "lifestyle",
+    strongKeywords: ["入居者", "住み心地", "快適性"],
+    keywords: ["暮らし", "快適", "住まい", "生活", "家族", "入居", "居住", "美観", "清潔", "きれい", "カラー", "シミュレーション", "デザイン", "景観"],
+  },
+  {
+    category: "concept",
+    strongKeywords: ["まとめ", "よくある質問", "FAQ"],
+    keywords: ["メリット", "デメリット", "重要", "成功", "効果", "理由", "目的", "基礎知識", "基本", "全体", "ガイド", "完全", "徹底", "解説"],
+  },
+];
+
 /**
- * H2見出し・段落テキストから、写真撮影指示書（英語）を自動生成する。
- * Gemini テキストモデルが「プロの商業カメラマン」として
- * カメラ・レンズ・照明・構図を含む具体的な撮影ディレクションを出力する。
- *
- * 生成されたプロンプトはそのまま gemini-3-pro-image-preview に渡して画像生成に使う。
+ * H2テキストと段落テキストからビジュアルカテゴリを判定する。
+ * strongKeywordsの1語マッチ → 即確定。それ以外はスコア最大のカテゴリを返す。
  */
-export const generatePhotographyPrompt = async (
-  h2Text: string,
-  paragraphText: string
-): Promise<string> => {
-  return retryWithExponentialBackoff(async () => {
-    const systemPrompt = `You are a professional commercial photographer specializing in Japanese corporate and editorial photography.
+function classifyVisualCategory(h2Text: string, paragraphText: string): VisualCategory {
+  const combined = (h2Text + " " + paragraphText).toLowerCase();
 
-Your task: Given a heading and paragraph from a Japanese business article, create a detailed PHOTOGRAPHY DIRECTION in English (max 200 words) that will be used to generate a photorealistic image.
+  // Phase 1: strongKeywordsで即確定
+  for (const rule of CATEGORY_RULES) {
+    if (rule.strongKeywords) {
+      for (const kw of rule.strongKeywords) {
+        if (combined.includes(kw)) {
+          console.log(`🏷️ カテゴリ確定(strong): ${rule.category} ← "${kw}"`);
+          return rule.category;
+        }
+      }
+    }
+  }
 
-REQUIREMENTS — always include ALL of these:
-1. SUBJECT: Concrete description of people (number, gender, clothing, action), objects, or scene. For people, specify Japanese individuals.
-2. CAMERA: Choose one — Sony α7IV, Canon EOS R5, or Fujifilm X-T5
-3. LENS: Focal length and aperture (e.g. "35mm f/1.8", "85mm f/1.4", "24-70mm f/2.8")
-4. LIGHTING: MUST be bright and well-lit. Use abundant natural daylight (large window light, clear sunny day, bright overcast). For indoor scenes use bright fluorescent office lighting or large windows letting in plenty of light. NEVER use dim, moody, or low-key lighting.
-5. COMPOSITION: Angle (eye-level, slightly above, low angle), framing, depth of field
-6. ATMOSPHERE: bright, clean, professional — like a Japanese stock photo
-7. SETTING: Specific Japanese location or interior (modern bright Tokyo office, clean apartment building under blue sky, etc.)
+  // Phase 2: 通常keywordsのスコアリング
+  let bestCategory: VisualCategory = "concept";
+  let bestScore = 0;
 
-CONSTRAINTS:
-- Output ONLY the photography direction. No explanations, no headers, no bullet points.
-- Write as a single flowing paragraph of natural English.
-- NO text, logos, watermarks, or UI elements in the image.
-- The scene must look like a real photograph taken in Japan.
-- Avoid overly perfect or symmetrical compositions — add slight natural imperfection.
-- The overall image must be BRIGHT and WELL-LIT with clean, natural colors. Think Japanese stock photography tone — warm, inviting. Preserve highlight detail and avoid blown-out whites.
-- For outdoor scenes, always use clear blue sky or bright daylight, NEVER overcast or cloudy.
-- White balance should be neutral to slightly warm.
+  for (const rule of CATEGORY_RULES) {
+    let score = 0;
+    for (const kw of rule.keywords) {
+      if (combined.includes(kw)) {
+        score++;
+      }
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestCategory = rule.category;
+    }
+  }
 
-IMPORTANT — SCAFFOLDING IMAGE SELECTION RULE:
-Do NOT default to scaffolding scenes for every construction-related article. Only depict scaffolding when the heading or paragraph EXPLICITLY mentions scaffolding, exterior painting, pressure washing, or building renovation work. For general topics (cost estimation, choosing a contractor, paint types, inspection, etc.), use appropriate non-scaffolding imagery instead (e.g., consultation scenes, building exteriors without scaffolding, office meetings, before/after comparisons).
+  console.log(`🏷️ カテゴリ判定: ${bestCategory} (score: ${bestScore})`);
+  return bestCategory;
+}
 
-CONSTRUCTION & PAINTING SITE SAFETY RULES (apply ONLY when the scene actually involves scaffolding, painting, washing, or renovation work — based on Astec Safety & Compliance Guide):
+// カテゴリ別のSUBJECT・SETTING・COMPOSITIONガイド
+const CATEGORY_PROMPTS: Record<VisualCategory, string> = {
+  "construction-site": `VISUAL CATEGORY: Construction / Painting Site
+SUBJECT GUIDANCE: Depict an active or completed construction/painting scene. Show the building wrapped in mesh sheets, workers in safety gear, or freshly painted surfaces. Focus on the WORK PROCESS or RESULT.
+SETTING: Japanese residential neighborhood, apartment or house exterior with scaffolding, clear blue sky above.
+COMPOSITION: Wide-angle (24-35mm) to show the full building and scaffolding coverage. Eye-level or slightly elevated angle. Maximum 2 workers visible.`,
+
+  "building-exterior": `VISUAL CATEGORY: Building Exterior / Architecture
+SUBJECT GUIDANCE: Show the building itself as the main subject — its walls, roof, facade, or architectural details. For deterioration topics, show close-up textures of walls, cracks, or weathering. For general topics, show a clean, well-maintained building exterior. Do NOT add people as the main subject.
+SETTING: Japanese residential area — apartment building, house, or commercial building under clear blue sky. Show surrounding landscaping or streets for context.
+COMPOSITION: Choose between wide-angle establishing shot (24mm) of full building, or medium telephoto (85-135mm) close-up of wall texture/architectural detail. Vary the angle — front facade, corner perspective, or upward-looking at roofline.`,
+
+  "consultation": `VISUAL CATEGORY: Professional Consultation / Business Meeting
+SUBJECT GUIDANCE: Show a consultation or advisory scene. IMPORTANT — pick ONE option that best matches the heading topic, and VARY from the previously used scene (if provided):
+  (a) A specialist pointing at a tablet or laptop screen showing diagrams/data to a client across a desk
+  (b) A single professional on a phone call at a tidy desk with documents spread out, looking engaged
+  (c) An on-site visit — a specialist with a clipboard standing near a building entrance, explaining to an owner
+  (d) A handshake moment between two people in a bright office doorway (trust / agreement theme)
+  (e) A specialist in a showroom gesturing toward product samples or color swatches on a display wall
+  (f) A single person seated at a desk reading through a thick document with a highlighter, concentrating
+  (g) Two people walking side-by-side outside along an apartment building, one pointing at the exterior
+Mix genders, ages, and attire naturally. Avoid defaulting to the same "two people sitting at a desk" setup every time.
+SETTING: Vary between — bright modern office, a clean meeting room, on-site at a building entrance, a showroom with samples, or an outdoor walkthrough.
+COMPOSITION: Medium shot (50-85mm f/1.8) with shallow depth of field. Eye-level or slightly above. Off-center framing with leading lines.`,
+
+  "data-analysis": `VISUAL CATEGORY: Data / Cost / Financial Analysis
+SUBJECT GUIDANCE: The main subject is DATA or DOCUMENTS — but a person may appear as a secondary element to add life. Options:
+  (a) Neatly arranged documents with charts/graphs on a bright wooden desk — no person
+  (b) Over-the-shoulder view of a person looking at a laptop screen showing a colorful dashboard (person is out-of-focus, screen is the hero)
+  (c) A calculator beside printed cost estimates and a pen on a clean desk — no person
+  (d) A person's hands holding a printed report, with a desk of documents in the background (hands and document in focus)
+Choose based on the heading topic. When a person appears, they should be secondary — not facing the camera.
+SETTING: Clean, bright desktop or workspace. White or light wooden table surface. Minimal background — soft bokeh of an office or home study.
+COMPOSITION: Overhead flat-lay (top-down at 90°) or 45-degree angle looking down at the desk surface. Use 35-50mm lens. Focus on the central object with surrounding items slightly soft.`,
+
+  "checklist": `VISUAL CATEGORY: Verification / Contract / Caution
+SUBJECT GUIDANCE: The DOCUMENT or PROCESS is the main subject, but a person's presence adds realism. Options:
+  (a) A hand holding a pen about to sign a contract, with the document in sharp focus and the person's torso softly blurred behind
+  (b) A checklist on a clipboard with some items checked off — a person's hand resting beside it
+  (c) A person carefully reading a document at a desk, seen from the side (document in focus, face in profile/soft focus)
+  (d) A neatly organized folder with labeled tabs on a clean desk — no person
+Choose based on heading theme. The document stays in focus; any person is partial (hands, silhouette, profile).
+SETTING: Bright office desk or conference table. Clean, minimal background. Warm natural light from a window.
+COMPOSITION: Close-up to medium shot (50-85mm macro or portrait lens). Shallow depth of field to isolate the key document/object. Slightly angled (30-45°) perspective on the desk surface.`,
+
+  "product": `VISUAL CATEGORY: Product / Material / Paint
+SUBJECT GUIDANCE: Feature the PRODUCT or MATERIAL as hero subject. Options: (a) paint cans neatly arranged with color swatches beside them, (b) a close-up of a freshly painted surface showing smooth texture and color, (c) product samples laid out on a clean white surface with natural light, (d) a cross-section or comparison showing different coating layers. No people needed.
+SETTING: Clean product photography setup — white or light gray background, or a bright workshop/showroom. Natural or studio lighting.
+COMPOSITION: Product photography style — 45° angle or eye-level with the product. 85-100mm lens for slight compression. Clean negative space around the subject. Sharp focus on product with soft background.`,
+
+  "lifestyle": `VISUAL CATEGORY: Lifestyle / Living Space / Comfort
+SUBJECT GUIDANCE: Show LIVING SPACES or RESIDENTIAL COMFORT. A person may appear naturally within the scene to convey livability. Options:
+  (a) A bright, clean Japanese apartment interior with natural light flooding through curtains — no person
+  (b) A person standing on a balcony looking out at a well-maintained residential area (seen from behind, silhouette framing)
+  (c) A family relaxing in a living room, seen from behind or at a distance — not portrait-style
+  (d) A beautifully painted house exterior with a small garden — a resident walking toward the entrance
+  (e) A person sitting by a large window reading, with a tidy apartment interior visible behind them (back or side view)
+Choose based on heading theme. People should feel incidental to the space, not posed.
+SETTING: Japanese residential interior (living room, bedroom, entrance) or residential neighborhood. Warm natural daylight. Clean, modern Japanese interior design.
+COMPOSITION: Wide-angle (24-35mm) to show the space, or medium shot (50mm) focused on a lifestyle detail. Natural framing through doorways or windows. Warm, inviting tone.`,
+
+  "concept": `VISUAL CATEGORY: Conceptual / Summary / Abstract
+SUBJECT GUIDANCE: Use a METAPHORICAL or SYMBOLIC image. A person may appear as part of the metaphor to add warmth. Options:
+  (a) An aerial/bird's-eye view of a Japanese residential neighborhood with clean rooftops — no person
+  (b) A sunrise or golden-hour light on a row of well-maintained buildings — a person walking along the street (small, distant)
+  (c) A close-up of hands stacking wooden blocks (building/planning metaphor)
+  (d) A clean desk with a notebook, pen, and a small plant — suggesting planning and fresh starts
+  (e) A person standing at a crossroads or looking down a bright residential street (back view, symbolizing decision/progress)
+  (f) A person on a rooftop or elevated viewpoint overlooking a neighborhood (back view, sense of overview/accomplishment)
+Choose based on heading theme. When a person appears, they should be seen from behind or at a distance — symbolic, not portrait.
+SETTING: Varies by chosen metaphor — outdoor Japanese landscape, minimalist indoor, or abstract space. Always bright and optimistic.
+COMPOSITION: Creative and varied — overhead, wide establishing, or tight symbolic close-up. Use the composition that best conveys the heading's abstract concept. Generous negative space for editorial feel.`,
+};
+
+// 足場・安全ルール（construction-site カテゴリのみ適用）
+const CONSTRUCTION_SAFETY_RULES = `
+CONSTRUCTION & PAINTING SITE SAFETY RULES (Astec Safety & Compliance Guide):
 
 === SCAFFOLDING (足場) ===
 1. TYPE: Use "kusabi (vike) scaffolding" — interlocking wedge-type scaffolding commonly used in Japanese residential renovation. For buildings wider than 1m work area, use "hon-ashiba" (double-row scaffolding) with two rows of vertical posts for maximum stability.
@@ -334,55 +476,112 @@ CONSTRUCTION & PAINTING SITE SAFETY RULES (apply ONLY when the scene actually in
 
 === HARNESS & FALL PROTECTION (フルハーネス型墜落制止用器具) ===
 8. Workers at ANY height on scaffolding MUST wear a full-body harness — NOT an old-style waist belt.
-9. Full-body harness anatomy (front view, top to bottom): shoulder straps (肩ベルト) running over both shoulders, a detachable connector strap (着脱式連結ベルト) joining the shoulder straps at upper chest, a chest strap/buckle (胸ベルト) across the mid-chest, a waist belt (胴ベルト) around the torso, and leg/thigh straps (腿ベルト) looping around each thigh with a pelvic belt (骨盤ベルト) connecting them at the lower back.
-10. Full-body harness anatomy (rear view): a single D-ring (D環) mounted at the center of the upper back between the shoulder blades where the shoulder straps converge. A lanyard (ランヤード) connects from this D-ring, incorporating a shock absorber (ショックアブソーバー) midway, and terminates in a carabiner hook (フック) that attaches to an anchor point on the scaffolding ABOVE the worker.
-11. All harness straps must appear taut and fitted — not loose or baggy. The lanyard must be visibly routed from the back D-ring upward to an overhead anchor — never coiled at the waist or dangling at the side.
+9. Full-body harness anatomy (front view, top to bottom): shoulder straps running over both shoulders, a detachable connector strap joining the shoulder straps at upper chest, a chest strap/buckle across the mid-chest, a waist belt around the torso, and leg/thigh straps looping around each thigh with a pelvic belt connecting them at the lower back.
+10. Full-body harness anatomy (rear view): a single D-ring mounted at the center of the upper back between the shoulder blades. A lanyard connects from this D-ring, incorporating a shock absorber midway, and terminates in a carabiner hook that attaches to an anchor point on the scaffolding ABOVE the worker.
+11. All harness straps must appear taut and fitted — not loose or baggy. The lanyard must be visibly routed from the back D-ring upward to an overhead anchor.
 
-=== WORKER ATTIRE (安全な服装) ===
-11. HELMET: SG-rated safety helmet with chin strap securely fastened under the chin. No towels wrapped under the helmet.
-12. CLOTHING: Long-sleeved uniform — short sleeves and rolled-up sleeves are prohibited. Shirt tucked into pants. Pants fitted properly with belt at waist — no baggy or oversized clothing. No accessories such as watches or bracelets.
-13. FOOTWEAR: Safety shoes or tabi-style work shoes. No sandals or loose footwear.
-14. GLOVES: Work gloves on both hands.
+=== WORKER ATTIRE ===
+12. HELMET: SG-rated safety helmet with chin strap securely fastened.
+13. CLOTHING: Long-sleeved uniform, shirt tucked into pants, no accessories.
+14. FOOTWEAR: Safety shoes or tabi-style work shoes.
+15. GLOVES: Work gloves on both hands.
 
 === GROUND SAFETY ===
-15. Entry prohibition signs or caution tape around the scaffolding perimeter to prevent residents and pedestrians from entering the work zone.
+16. Entry prohibition signs or caution tape around the scaffolding perimeter.
 
-NEGATIVE PROMPT (absolutely NEVER generate these):
+NEGATIVE PROMPT (NEVER generate these):
 - Scaffolding that covers only part of the building or stops below the roofline
-- Scaffolding without splash-prevention mesh sheets during washing or painting
-- Gaps or loose sections in splash-prevention sheets
 - Workers without full-body harness on scaffolding
-- Waist-only safety belts — these are outdated and prohibited
-- Harness lanyards hanging loose, coiled at the waist, or not connected to overhead anchor points
-- Harness with no visible D-ring on the upper back
-- Harness straps that look like simple ropes or single lines instead of proper flat webbing belts
-- Shoulder straps missing or not clearly running over both shoulders
+- Waist-only safety belts (outdated and prohibited)
+- Harness lanyards hanging loose or not connected overhead
 - Workers with bare arms, rolled-up sleeves, or short sleeves
-- Shirts not tucked into pants
-- Workers without chin straps fastened on helmets
 - Paint cans or tools scattered on scaffolding platforms
-- Pedestrians or residents walking under or near scaffolding without barriers
-- Harness straps that fade into or blend with clothing
+- Pedestrians walking under scaffolding without barriers
 
-ANTI-HALLUCINATION RULES (critical for accuracy):
-- If you cannot confidently depict a specific safety detail (e.g., harness D-ring, lanyard anchor connection), zoom OUT to a wider shot where that detail becomes a small part of the overall scene rather than attempting a close-up that may be inaccurate.
-- ALWAYS default to the SAFEST and SIMPLEST depiction: a fully mesh-wrapped building seen from a distance is always better than a close-up with incorrect harness details.
-- Treat each safety rule as a HARD CONSTRAINT, not a suggestion. If a rule conflicts with artistic composition, the safety rule wins.
-- When depicting scaffolding, show it as a UNIFORM GRID pattern covering the building — do not attempt to show individual pipe joints or connectors, as these are prone to hallucination.
-- For splash-prevention sheets, depict them as a CONTINUOUS FLAT SURFACE with no visible building behind them — this is easier to render accurately than semi-transparent mesh.
-
-COMPOSITION GUIDANCE FOR CONSTRUCTION SCENES:
-- Prefer WIDE-ANGLE shots (24mm-35mm) showing the full building with complete scaffolding and sheet coverage from ground to above roofline.
-- When workers are the subject, frame from MEDIUM DISTANCE so the full harness including shoulder straps, leg loops, and lanyard connection to overhead anchor is clearly visible.
-- Use EYE-LEVEL or SLIGHTLY ELEVATED angles. Avoid low-angle shots looking up — they hide harness details.
-- If accurate scaffolding or harness detail is difficult, prefer a DISTANT VIEW where the mesh-covered scaffolding is the dominant visual element.
+ANTI-HALLUCINATION RULES:
+- If you cannot confidently depict safety details, zoom OUT to a wider shot.
+- A fully mesh-wrapped building from a distance is always better than an inaccurate close-up.
+- Show scaffolding as a UNIFORM GRID pattern — do not attempt individual pipe joints.
+- Show splash-prevention sheets as a CONTINUOUS FLAT SURFACE.
 
 SIMPLIFICATION RULES:
-- Maximum 2 workers visible. Fewer workers means more accurate safety gear depiction.
-- For detailed harness scenes, show only 1 worker with harness straps in a contrasting color against the uniform.
-- When in doubt, choose a simpler composition such as a fully mesh-wrapped building exterior over a complex close-up worker scene.
-- Avoid depicting workers mid-action with complex poses — static standing poses are easier to render with correct safety gear.
+- Maximum 2 workers visible.
+- When in doubt, choose a fully mesh-wrapped building exterior over a complex worker scene.
+`;
 
+// カテゴリ別フォールバックプロンプト
+const CATEGORY_FALLBACKS: Record<VisualCategory, string> = {
+  "construction-site":
+    "A bright, wide-angle photograph of a Japanese apartment building fully wrapped in gray mesh splash-prevention sheets on kusabi scaffolding under a clear blue sky, shot on Sony α7IV with 24mm f/2.8 lens, abundant natural daylight, clean composition showing the full building from ground to above roofline, no text or logos.",
+  "building-exterior":
+    "A bright editorial photograph of a clean Japanese apartment building exterior under clear blue sky, shot on Canon EOS R5 with 35mm f/1.8 lens, warm natural daylight, slight perspective from the corner showing two facades, well-maintained walls and neat entrance, residential neighborhood setting, no text or logos.",
+  "consultation":
+    "A bright photograph of a Japanese female specialist in a navy blazer explaining building plans on a tablet to a middle-aged male property owner across a clean white meeting table, shot on Fujifilm X-T5 with 56mm f/1.4 lens, large window natural light from the left, shallow depth of field, modern office interior, no text or logos.",
+  "data-analysis":
+    "A bright overhead flat-lay photograph of neatly arranged financial documents, a silver calculator, a blue pen, and printed cost comparison charts on a clean light wooden desk, shot on Sony α7IV with 35mm f/1.8 lens, soft natural window light from above, clean warm tones, no text or logos.",
+  "checklist":
+    "A bright close-up photograph of a Japanese professional's hand holding a pen beside a printed checklist document on a clean white desk, with a few items already checked off, shot on Canon EOS R5 with 85mm f/1.4 lens, natural window light creating soft shadows, shallow depth of field with the checklist in sharp focus, no text or logos.",
+  "product":
+    "A bright product photograph of three paint cans in different colors arranged on a clean white surface with color sample cards fanned out beside them, shot on Fujifilm X-T5 with 90mm f/2 macro lens, soft diffused studio lighting, clean background with gentle shadows, no text or logos.",
+  "lifestyle":
+    "A bright interior photograph of a modern Japanese apartment living room with sunlight streaming through sheer curtains, clean minimalist furniture, a small indoor plant on the windowsill, warm hardwood floors, shot on Sony α7IV with 24mm f/1.8 lens, abundant natural daylight, inviting and comfortable atmosphere, no text or logos.",
+  "concept":
+    "A bright aerial photograph of a Japanese residential neighborhood with clean colorful rooftops arranged in a natural pattern, clear blue sky above, green trees interspersed between houses, shot on Canon EOS R5 with 35mm f/2 lens, golden morning light, clean and optimistic atmosphere, no text or logos.",
+};
+
+/**
+ * H2見出し・段落テキストから、写真撮影指示書（英語）を自動生成する。
+ * まずビジュアルカテゴリを判定し、カテゴリに応じたプロンプトで
+ * Gemini テキストモデルが撮影ディレクションを出力する。
+ * 足場・安全ルールは construction-site カテゴリのみに注入する。
+ */
+export const generatePhotographyPrompt = async (
+  h2Text: string,
+  paragraphText: string,
+  previousScenes?: string[]
+): Promise<string> => {
+  // Step 1: ビジュアルカテゴリ判定
+  const category = classifyVisualCategory(h2Text, paragraphText);
+  const categoryGuide = CATEGORY_PROMPTS[category];
+
+  // Step 2: 足場ルールは construction-site のみ
+  const safetyRulesBlock = category === "construction-site" ? CONSTRUCTION_SAFETY_RULES : "";
+
+  return retryWithExponentialBackoff(async () => {
+    const systemPrompt = `You are a professional commercial photographer specializing in Japanese corporate and editorial photography.
+
+Your task: Given a heading and paragraph from a Japanese business article, create a detailed PHOTOGRAPHY DIRECTION in English (max 200 words) that will be used to generate a photorealistic image.
+
+${categoryGuide}
+
+TECHNICAL REQUIREMENTS — always include ALL of these in your output:
+1. CAMERA: Choose one — Sony α7IV, Canon EOS R5, or Fujifilm X-T5
+2. LENS: Focal length and aperture (e.g. "35mm f/1.8", "85mm f/1.4", "24-70mm f/2.8")
+3. LIGHTING: MUST be bright and well-lit. Use abundant natural daylight (large window light, clear sunny day). For indoor scenes, use bright fluorescent office lighting or large windows. NEVER use dim, moody, or low-key lighting.
+4. ATMOSPHERE: bright, clean, professional — like a Japanese stock photo (PIXTA / photo-ac tone)
+
+CONSTRAINTS:
+- Output ONLY the photography direction as a single flowing paragraph. No explanations, headers, or bullet points.
+- NO text, logos, watermarks, or UI elements in the image.
+- The scene must look like a real photograph taken in Japan.
+- BRIGHT and WELL-LIT with clean, natural colors. Preserve highlight detail.
+- For outdoor scenes, always use clear blue sky, NEVER overcast.
+- White balance: neutral to slightly warm.
+- Avoid overly perfect symmetry — add natural imperfection.
+
+ANTI-HALLUCINATION RULES (apply to ALL categories):
+- If you cannot confidently depict a specific detail (fine text on documents, precise product labels, complex mechanical parts), zoom OUT or simplify so that detail becomes a small, unreadable part of the scene.
+- Prefer SIMPLE, CLEAN compositions with fewer elements. A clean scene with 2-3 key objects is always better than a cluttered scene with 10 items that may be inaccurately rendered.
+- Do NOT attempt to generate readable text, numbers, or characters in any language — they will be garbled. Frame the shot so any text is too small or blurred to read.
+- For scenes with people, keep the number to 1-2 individuals. More people means more opportunities for anatomical errors (hands, fingers, faces).
+- When in doubt, choose a WIDER framing that shows the overall scene rather than a close-up that demands precise detail.
+${safetyRulesBlock}
+${previousScenes && previousScenes.length > 0 ? `
+SCENE VARIETY RULE (IMPORTANT):
+The following scenes were already used for earlier sections of this same article. You MUST choose a DIFFERENT composition, setting, and subject arrangement. Do NOT repeat a similar setup:
+${previousScenes.map((s, i) => `  ${i + 1}. ${s}`).join("\n")}
+Pick a distinctly different option from the SUBJECT GUIDANCE list above.
+` : ""}
 Heading: "${h2Text}"
 Paragraph: "${paragraphText}"
 
@@ -401,12 +600,13 @@ Photography Direction:`;
     result = result.replace(/^\*\*.*/gm, "").trim();
     result = result.replace(/^-\s.*/gm, "").trim();
 
-    console.log("📸 写真プロンプト生成完了 (" + result.length + " chars)");
+    console.log(`📸 写真プロンプト生成完了 [${category}] (${result.length} chars)`);
     return result;
   }).catch((error: any) => {
     console.error("Error generating photography prompt after retries:", error);
-    // フォールバック: 汎用的な写真プロンプト
-    return "A bright, well-lit editorial photograph of Japanese business professionals in a modern Tokyo office with large windows, shot on Sony α7IV with 35mm f/1.8 lens, abundant natural daylight streaming in, slight bokeh in background, clean warm color palette, high-key exposure, no text or logos.";
+    // カテゴリ別フォールバック
+    console.log(`⚠️ フォールバック使用 [${category}]`);
+    return CATEGORY_FALLBACKS[category];
   });
 };
 

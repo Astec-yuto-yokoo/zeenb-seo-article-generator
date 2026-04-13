@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import type { SeoOutline } from "../types";
 import { generateFaqSchemaFromArticle } from "../utils/faqSchemaGenerator";
+import { generateSlug } from "../services/slugGenerator";
 
 interface ArticleDisplayProps {
   article: {
@@ -73,15 +74,26 @@ ${article.plainText}`;
     URL.revokeObjectURL(url);
   };
 
-  const handleOpenImageGenerator = () => {
+  const handleOpenImageGenerator = async () => {
     // 画像生成エージェントに記事データを渡す
     // 修正済みの最新記事を優先的に使用
+    // slugはキーワードを英訳して生成（未指定の場合）
+    let slug = (article as any).slug as string | undefined;
+    if (!slug) {
+      try {
+        slug = await generateSlug(keyword);
+      } catch (e) {
+        console.error("⚠️ slug生成失敗、フォールバックを使用:", e);
+        slug = "post";
+      }
+    }
+
     const articleData = {
       title: article.title,
       htmlContent: article.htmlContent, // 常に最新の記事内容を使用
       metaDescription: article.metaDescription,
       keyword: keyword,
-      slug: (article as any).slug || "auto-generated",
+      slug: slug,
     };
 
     console.log("🎨 画像生成エージェントへデータを送信");

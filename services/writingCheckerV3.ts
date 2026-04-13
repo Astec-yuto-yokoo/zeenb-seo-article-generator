@@ -13,6 +13,15 @@ interface CheckRequest {
   outline: string;
   keyword: string;
   competitorInfo?: any;
+  referenceMaterialContext?: string; // 参考資料が選択されている場合のみ出典チェックを有効化
+  minSourceCitations?: number;       // 最低出現回数（デフォルト2）
+}
+
+interface SourceCitationStats {
+  expected: number;
+  actual: number;
+  sources: string[];
+  passed: boolean;
 }
 
 interface CheckResult {
@@ -23,7 +32,9 @@ interface CheckResult {
     accuracy: number;
     structure: number;
     value: number;
+    sourceCitation?: number; // 参考資料が選択されている場合のみセット
   };
+  sourceCitationStats?: SourceCitationStats; // 出典反映の定量情報
   issues: Issue[];
   improvements: Improvement[];
   rewriteSuggestions: RewriteSuggestion[];
@@ -133,9 +144,73 @@ const CHECK_CRITERIA = `
 - 本文（<p>タグ内など）での<strong>タグ使用は問題なし（むしろ推奨）
 `;
 
+/**
+ * 記事HTMLから <p class="source-citation"> の出現回数と引用資料タイトルを抽出。
+ * AIに判断させず、コードで事実を確定するための決定論的カウント関数。
+ */
+function countSourceCitations(article: string): {
+  count: number;
+  sources: string[];
+} {
+  const regex = /<p[^>]*class="source-citation"[^>]*>([\s\S]*?)<\/p>/gi;
+  const matches = Array.from(article.matchAll(regex));
+
+  const sources: string[] = [];
+  for (const m of matches) {
+    const inner = m && m[1] ? m[1] : '';
+    const titleMatch = inner.match(/「([^」]+)」/);
+    if (titleMatch && titleMatch[1]) {
+      sources.push(titleMatch[1]);
+    }
+  }
+
+  return {
+    count: matches.length,
+    sources: Array.from(new Set(sources)), // 重複除去
+  };
+}
+
 export async function checkArticleV3(request: CheckRequest): Promise<CheckResult> {
   console.log('🔍 ライティングチェックV3 開始');
-  
+
+  // ===== 出典タグの事前カウント（参考資料が選択されている場合のみ判定有効） =====
+  const hasReferenceMaterial = !!(request.referenceMaterialContext && request.referenceMaterialContext.length > 0);
+  const minRequired = request.minSourceCitations !== undefined ? request.minSourceCitations : 2;
+  const citationStats = countSourceCitations(request.article);
+  const citationPassed = !hasReferenceMaterial || citationStats.count >= minRequired;
+
+  if (hasReferenceMaterial) {
+    console.log(`📚 出典タグカウント: ${citationStats.count}/${minRequired} (${citationPassed ? '✅ 合格' : '❌ 不足'})`);
+    console.log(`📚 引用資料: ${citationStats.sources.length > 0 ? citationStats.sources.join('、') : 'なし'}`);
+  } else {
+    console.log('📚 出典チェック: 参考資料未選択のためスキップ');
+  }
+
+  // 出典チェックブロック（参考資料がある場合のみプロンプトに注入）
+  const sourceCitationCheckBlock = hasReferenceMaterial ? `
+
+【参考資料からの引用検証】🔴
+本記事では参考資料が指定されています。以下の事実（コードによる事前カウント結果）を踏まえて評価してください：
+- 期待される最低引用数: ${minRequired}箇所
+- 実際の <p class="source-citation"> 出現数: ${citationStats.count}箇所
+- 引用された資料: ${citationStats.sources.length > 0 ? citationStats.sources.join('、') : 'なし'}
+- コード判定: ${citationPassed ? '✅ 合格' : '❌ 不足（重大問題）'}
+
+【sourceCitationスコアの採点ルール】
+- 引用数 ≥ ${minRequired} かつ 文脈に自然に溶け込んでいる: 90-100点
+- 引用数 ≥ ${minRequired} だが機械的・違和感あり: 70-89点
+- 引用数が不足（${minRequired}未満）: 40-69点
+- 引用ゼロ: 0-39点（criticalイシューとして必ず指摘すること）
+
+${!citationPassed ? `【必須対応】出典が不足しているため、必ず以下の形式でissuesに追加してください：
+{
+  "severity": "critical",
+  "category": "出典反映不足",
+  "description": "参考資料からの引用が${citationStats.count}箇所しかなく、最低${minRequired}箇所を下回っています。E-E-A-T観点から独自データ・事例を本文に組み込み、<p class=\\"source-citation\\">タグで出典を明記してください。",
+  "location": "記事全体"
+}` : ''}
+` : '';
+
   try {
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-pro",
@@ -151,6 +226,7 @@ export async function checkArticleV3(request: CheckRequest): Promise<CheckResult
 以下の記事を厳密に評価し、改善提案を行ってください。
 
 ${CHECK_CRITERIA}
+${sourceCitationCheckBlock}
 
 【評価対象記事】
 ${request.article.slice(0, 30000)} // 最初の30000文字
@@ -220,12 +296,53 @@ ${request.keyword}
     
     try {
       const checkResult = JSON.parse(response) as CheckResult;
+
+      // ===== 出典チェックの結果を決定論的データで上書き（AI返答に依存しない） =====
+      if (hasReferenceMaterial) {
+        checkResult.sourceCitationStats = {
+          expected: minRequired,
+          actual: citationStats.count,
+          sources: citationStats.sources,
+          passed: citationPassed,
+        };
+
+        // 引用不足時は総合スコアから減点（最大-15点）
+        if (!citationPassed) {
+          const shortage = minRequired - citationStats.count;
+          const penalty = Math.min(15, shortage * 8);
+          const before = checkResult.overallScore;
+          checkResult.overallScore = Math.max(0, checkResult.overallScore - penalty);
+          console.warn(`⚠️ 出典不足によるスコア減点: ${before} → ${checkResult.overallScore} (-${penalty}点)`);
+
+          // AIがcriticalイシューを追加し忘れた場合のフォールバック
+          const hasCitationIssue = checkResult.issues && checkResult.issues.some(i => i.category === '出典反映不足');
+          if (!hasCitationIssue) {
+            if (!checkResult.issues) checkResult.issues = [];
+            checkResult.issues.unshift({
+              severity: 'critical',
+              category: '出典反映不足',
+              description: `参考資料からの引用が${citationStats.count}箇所しかなく、最低${minRequired}箇所を下回っています。E-E-A-T観点から独自データ・事例を本文に組み込み、<p class="source-citation">タグで出典を明記してください。`,
+              location: '記事全体',
+            });
+          }
+        }
+      }
+
       console.log('✅ チェック完了 - 総合スコア:', checkResult.overallScore);
       return checkResult;
     } catch (parseError) {
       console.error('JSONパースエラー:', parseError);
       // フォールバック結果を返す
-      return createFallbackResult();
+      const fallback = createFallbackResult();
+      if (hasReferenceMaterial) {
+        fallback.sourceCitationStats = {
+          expected: minRequired,
+          actual: citationStats.count,
+          sources: citationStats.sources,
+          passed: citationPassed,
+        };
+      }
+      return fallback;
     }
 
   } catch (error) {

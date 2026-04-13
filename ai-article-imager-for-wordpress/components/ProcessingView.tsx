@@ -186,16 +186,29 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ sections: initia
                 </div>
             </div>
             <div className="space-y-4">
-                {sections.map((section, index) => (
-                    <H2ProcessingCard
-                        key={section.id}
-                        section={section}
-                        updateSection={updateSection}
-                        startProcessing={isProcessingAll && currentProcessingIndex === index}
-                        onProcessingComplete={() => {}}
-                        availableImages={availableImages}
-                    />
-                ))}
+                {sections.map((section, index) => {
+                    // 前のセクションで生成済みの写真プロンプトを収集（シーン重複回避用）
+                    const previousScenes: string[] = [];
+                    for (let i = 0; i < index; i++) {
+                        const prev = sections[i];
+                        if (prev && prev.backgroundInstruction && (prev.status === 'success' || prev.status === 'generating')) {
+                            // 最初の1文（約50語）をシーン概要として渡す
+                            const summary = prev.backgroundInstruction.split('. ').slice(0, 2).join('. ');
+                            previousScenes.push(summary);
+                        }
+                    }
+                    return (
+                        <H2ProcessingCard
+                            key={section.id}
+                            section={section}
+                            updateSection={updateSection}
+                            startProcessing={isProcessingAll && currentProcessingIndex === index}
+                            onProcessingComplete={() => {}}
+                            availableImages={availableImages}
+                            previousScenes={previousScenes}
+                        />
+                    );
+                })}
             </div>
         </div>
     );

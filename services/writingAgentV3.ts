@@ -12,6 +12,7 @@ import { curriculumDataService } from "./curriculumDataService";
 import { getContextForKeywords, isSupabaseAvailable } from "./primaryDataService";
 import type { ImageAsset } from "./boxImageService";
 import { buildImageContext } from "./contextBuilder";
+import { buildProductRecommendationText } from "./productRecommendationConfig";
 // latestAIModelsは汎用化のため削除
 
 const API_KEY =
@@ -874,14 +875,15 @@ ${linkList}
 
 ${request.referenceMaterialContext}
 
-執筆への反映ルール：
+執筆への反映ルール（必須）：
+※ 以下の参考資料情報は、この記事の独自性・専門性を高めるために不可欠です。必ず記事本文に反映してください。
 1. 「独自データ・統計」→ 関連する段落で具体的な数値として引用。「自社調査によると〜」などの自然な導入で記載
 2. 「導入事例・成功体験」→ Before/After形式で具体的に記述。企業名・数値は正確に引用
 3. 「専門的知見・ノウハウ」→ 解説の中で「実務上のポイントとして〜」など、経験に基づく情報として自然に織り込む
 4. 「FAQ・よくある課題」→ FAQセクションや関連H2の中で読者の疑問として取り上げる
 5. 「記事への活用提案」→ この提案内容を参考に、各セクションへ自然に分散して配置する
 6. 引用した箇所の直後に出典を記載: <p class="source-citation">※出典元：自社資料「資料タイトル」</p>
-7. 無理に全情報を使う必要はない。記事の文脈・読者の関心に合う情報のみ使用すること
+7. 上記の参考資料情報のうち、最低でも3箇所以上を記事本文に反映すること。反映ゼロは禁止
 `;
       console.log(`✅ [1.8/4] 完了: 参考資料注入 (${request.referenceMaterialContext.length}文字)`);
     } else {
@@ -897,6 +899,9 @@ ${request.referenceMaterialContext}
     } else {
       console.log("⏭️ [1.9/4] スキップ: BOX画像なし");
     }
+
+    // 自社製品レコメンドの構築（屋根遮熱・外壁美観テーマのみ）
+    const productRecommendationText = buildProductRecommendationText(request.keyword, request.outline);
 
     // モデル設定
     const modelConfig: any = {
@@ -947,6 +952,7 @@ ${internalLinkText}
 ${primaryDataText}
 ${referenceMaterialText}
 ${imageContextText}
+${productRecommendationText}
 【目標文字数（厳守）】
 記事全体で ${request.targetCharCount || 5500} 文字（±10%以内）。これを超えないこと。
 各セクションは簡潔にまとめ、冗長な表現や繰り返しを避けること。
@@ -978,6 +984,14 @@ ${
 ${
   request.useGrounding
     ? "※ 最新情報はウェブ検索で確認しながら執筆してください。"
+    : ""
+}
+${
+  request.referenceMaterialContext
+    ? `【最終確認（参考資料の反映）】
+上記で提供した【自社独自情報（E-E-A-T強化用・AI分析済み）】の内容を記事本文に必ず反映してください。
+参考資料の独自データ・事例・知見を最低3箇所以上、本文中に具体的に織り込むこと。
+参考資料の情報が1つも反映されていない記事は不合格です。`
     : ""
 }
 `;

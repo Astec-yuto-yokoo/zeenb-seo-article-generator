@@ -10,9 +10,10 @@ interface H2ProcessingCardProps {
     startProcessing: boolean;
     onProcessingComplete: () => void;
     availableImages?: Array<{name: string; base64: string}>;  // 利用可能な画像リスト
+    previousScenes?: string[];  // 前のH2で生成済みのシーン概要リスト（重複回避用）
 }
 
-export const H2ProcessingCard: React.FC<H2ProcessingCardProps> = ({ section, updateSection, startProcessing, onProcessingComplete, availableImages }) => {
+export const H2ProcessingCard: React.FC<H2ProcessingCardProps> = ({ section, updateSection, startProcessing, onProcessingComplete, availableImages, previousScenes }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [editablePrompt, setEditablePrompt] = useState(
         section.prompt + (section.backgroundInstruction ? `\n- **背景の指定:** ${section.backgroundInstruction}` : '')
@@ -36,7 +37,7 @@ export const H2ProcessingCard: React.FC<H2ProcessingCardProps> = ({ section, upd
                 // Step 1: Gemini テキストモデルで写真撮影指示書を生成
                 updateSection({ ...section, status: 'generating', generationStep: '📸 写真プロンプトを生成中...' });
                 try {
-                    photographyDirection = await generatePhotographyPrompt(section.h2Text, section.paragraphText);
+                    photographyDirection = await generatePhotographyPrompt(section.h2Text, section.paragraphText, previousScenes);
                     currentPrompt = wrapPhotographyPrompt(photographyDirection);
                     setEditablePrompt(currentPrompt);
                 } catch (error) {

@@ -367,13 +367,21 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
         console.log("✅ Ver.3生成完了（Grounding機能使用）");
 
         // 品質チェックも実行
+        // 出典タグの最低出現回数（記事長に応じて動的に決定）
+        const minSourceCitations = targetChars >= 6000 ? 3 : targetChars >= 3000 ? 2 : 1;
         const checkResult = await checkArticleV3({
           article: v3Result,
           outline: outlineMarkdown,
           keyword: keyword,
+          referenceMaterialContext: referenceMaterialContext,
+          minSourceCitations: minSourceCitations,
         });
 
         console.log(`📊 品質スコア: ${checkResult.overallScore}/100`);
+        if (checkResult.sourceCitationStats) {
+          const s = checkResult.sourceCitationStats;
+          console.log(`📚 出典タグ: ${s.actual}/${s.expected}箇所 (${s.passed ? '✅合格' : '❌不足'})`);
+        }
         console.log("📝 改善提案:", checkResult.improvements);
 
         // クリーンアップ処理を実行
