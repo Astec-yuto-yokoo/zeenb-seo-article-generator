@@ -26,7 +26,8 @@ import { LogoIcon, SparklesIcon } from "./components/icons";
 import TextCheckPage from "./components/TextCheckPage";
 import ReferenceMaterialManager from "./components/ReferenceMaterialManager";
 import ReferenceMaterialSelector from "./components/ReferenceMaterialSelector";
-import { buildPromptContext, analyzeForArticle } from "./services/referenceMaterialService";
+import { buildPromptContext, analyzeForArticle, listMaterials } from "./services/referenceMaterialService";
+import type { ReferenceMaterial } from "./services/referenceMaterialService";
 import AutoProgressDisplay, {
   type AutoStep,
 } from "./components/AutoProgressDisplay";
@@ -57,6 +58,7 @@ const App: React.FC = () => {
   // 参考資料の選択状態
   const [selectedRefMaterialIds, setSelectedRefMaterialIds] = useState<string[]>([]);
   const [refMaterialContext, setRefMaterialContext] = useState<string>("");
+  const [availableMaterials, setAvailableMaterials] = useState<ReferenceMaterial[]>([]);
   const [analysisProgress, setAnalysisProgress] = useState<{
     current: number;
     total: number;
@@ -121,6 +123,12 @@ const App: React.FC = () => {
   useEffect(() => {
     queueActiveRef.current = queueActive;
   }, [queueActive]);
+
+  useEffect(() => {
+    listMaterials()
+      .then(function(data) { setAvailableMaterials(data); })
+      .catch(function(err) { console.warn("参考資料一覧の取得に失敗:", err); });
+  }, []);
 
   // Keep-alive: フル自動モード処理中はバックエンドを5分ごとにpingしてアイドル終了を防ぐ
   useEffect(() => {
@@ -1699,6 +1707,7 @@ const App: React.FC = () => {
                       setWritingMode("v3");
                       setShowArticleWriter(true);
                     }}
+                    availableMaterials={availableMaterials}
                   />
                 )}
 
@@ -1784,6 +1793,28 @@ const App: React.FC = () => {
             isAutoMode={autoArticleWriter} // フル自動モードフラグ
             skipAutoGenerate={showArticleWriter && generatedArticle !== null} // 編集再開時は自動生成をスキップ
             referenceMaterialContext={refMaterialContext || undefined}
+            sectionReferenceMaterials={
+              outlineV2 ? (function() {
+                const map: Record<number, string[]> = {};
+                for (let i = 0; i < outlineV2.outline.length; i++) {
+                  const sec = outlineV2.outline[i];
+                  if (sec && sec.referenceMaterialIds && sec.referenceMaterialIds.length > 0) {
+                    const names: string[] = [];
+                    for (let j = 0; j < sec.referenceMaterialIds.length; j++) {
+                      const id = sec.referenceMaterialIds[j];
+                      const mat = availableMaterials.find(function(m) { return m.id === id; });
+                      if (mat) {
+                        names.push(mat.title || mat.originalFileName);
+                      }
+                    }
+                    if (names.length > 0) {
+                      map[i] = names;
+                    }
+                  }
+                }
+                return Object.keys(map).length > 0 ? map : undefined;
+              })() : undefined
+            }
             onOpenImageAgent={openImageAgentInIframe}
             onClose={() => {
               setShowArticleWriter(false);

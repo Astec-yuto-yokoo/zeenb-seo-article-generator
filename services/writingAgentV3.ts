@@ -564,6 +564,7 @@ interface WritingRequest {
   referenceMaterialContext?: string; // 参考資料テキスト（任意）
   targetCharCount?: number; // 目標文字数（指定なしの場合デフォルト5500）
   imageAssets?: ImageAsset[]; // BOX画像アセット（任意）
+  sectionReferenceMaterials?: Record<number, string[]>;
 }
 
 // 内部リンクマップを取得する関数（スプレッドシート由来）
@@ -951,6 +952,7 @@ ${curriculumDataText}
 ${internalLinkText}
 ${primaryDataText}
 ${referenceMaterialText}
+${buildSectionRefMaterialText(request.sectionReferenceMaterials)}
 ${imageContextText}
 ${productRecommendationText}
 【目標文字数（厳守）】
@@ -1261,6 +1263,30 @@ async function searchCitationUrl(citationContent: string): Promise<string> {
     console.error("    ❌ 検索エラー:", err);
     return "";
   }
+}
+
+function buildSectionRefMaterialText(sectionMaterials?: Record<number, string[]>): string {
+  if (!sectionMaterials) return "";
+
+  const entries: string[] = [];
+  const keys = Object.keys(sectionMaterials);
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    if (key === undefined) continue;
+    const sectionIndex = parseInt(key, 10);
+    const materialNames = sectionMaterials[sectionIndex];
+    if (!materialNames || materialNames.length === 0) continue;
+    const nameList = materialNames.map(function(name) { return "「" + name + "」"; }).join("、");
+    entries.push("- H2-" + (sectionIndex + 1) + ": " + nameList + " の情報を重点的に活用");
+  }
+
+  if (entries.length === 0) return "";
+
+  return "\n【H2セクション別 参考資料活用指示（重要）】\n" +
+    "以下のH2セクションでは、指定された参考資料の情報を自然な形で本文に盛り込んでください。\n" +
+    "引用した箇所の直後に <p class=\"source-citation\">※出典元：自社資料「資料タイトル」</p> を記載すること。\n\n" +
+    entries.join("\n") + "\n\n" +
+    "※ 指定のないH2セクションでは、参考資料の強制的な反映は不要です（文脈に合えば自然に活用してもよい）。\n";
 }
 
 // カスタムインストラクションの管理

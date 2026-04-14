@@ -59,6 +59,7 @@ export interface OutlineSectionV2 {
   subheadings: SubheadingWithNote[];
   imageSuggestion: string; // 具体的な画像提案（被写体・構図まで）
   writingNote: string; // H2ごとの執筆メモ（最大200字）
+  referenceMaterialIds?: string[];
 }
 
 export interface CompetitorComparisonSummary {

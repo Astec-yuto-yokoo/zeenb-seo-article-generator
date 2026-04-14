@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { SeoOutlineV2, OutlineSectionV2 } from '../types';
 import { countCharacters } from '../utils/characterCounter';
 import { reviseOutlineSection, reviseFullOutline } from '../services/outlineGeneratorV2';
+import type { ReferenceMaterial } from '../services/referenceMaterialService';
 import {
   TitleIcon,
   TargetIcon,
@@ -20,6 +21,7 @@ interface OutlineDisplayV2Props {
   onOutlineUpdate?: (updatedOutline: SeoOutlineV2) => void; // 構成案更新コールバック
   onStartWriting?: () => void; // Ver.2執筆
   onStartWritingV3?: () => void; // Ver.3執筆（Gemini Pro + Grounding）
+  availableMaterials?: ReferenceMaterial[];
 }
 
 const Card: React.FC<{ icon: React.ReactNode; title: string; children: React.ReactNode }> = ({ icon, title, children }) => (
@@ -36,7 +38,7 @@ const Card: React.FC<{ icon: React.ReactNode; title: string; children: React.Rea
   </div>
 );
 
-const OutlineDisplayV2: React.FC<OutlineDisplayV2Props> = ({ outline, keyword, onOutlineUpdate, onStartWriting, onStartWritingV3 }) => {
+const OutlineDisplayV2: React.FC<OutlineDisplayV2Props> = ({ outline, keyword, onOutlineUpdate, onStartWriting, onStartWritingV3, availableMaterials }) => {
   const [copyButtonText, setCopyButtonText] = useState('Markdownコピー');
   const [revisionPrompts, setRevisionPrompts] = useState<Record<number, string>>({});
   const [revisingSection, setRevisingSection] = useState<number | null>(null);
@@ -44,6 +46,41 @@ const OutlineDisplayV2: React.FC<OutlineDisplayV2Props> = ({ outline, keyword, o
   const [fullRevisionPrompt, setFullRevisionPrompt] = useState('');
   const [isRevisingFull, setIsRevisingFull] = useState(false);
   const [fullRevisionError, setFullRevisionError] = useState<string | null>(null);
+
+  const [expandedMaterialSections, setExpandedMaterialSections] = useState<Record<number, boolean>>({});
+
+  const handleToggleSectionMaterial = (sectionIndex: number, materialId: string) => {
+    if (!onOutlineUpdate) return;
+    const section = outline.outline[sectionIndex];
+    if (!section) return;
+    const currentIds = section.referenceMaterialIds || [];
+    const isSelected = currentIds.indexOf(materialId) !== -1;
+    const newIds = isSelected
+      ? currentIds.filter(function(id) { return id !== materialId; })
+      : [...currentIds, materialId];
+    const updatedSections = [...outline.outline];
+    updatedSections[sectionIndex] = { ...section, referenceMaterialIds: newIds };
+    onOutlineUpdate({ ...outline, outline: updatedSections });
+  };
+
+  const toggleMaterialSectionExpand = (sectionIndex: number) => {
+    setExpandedMaterialSections(function(prev) {
+      const next = { ...prev };
+      next[sectionIndex] = !prev[sectionIndex];
+      return next;
+    });
+  };
+
+  const getFileIcon = (fileType: string) => {
+    switch (fileType) {
+      case "pdf": return "📄";
+      case "docx": case "doc": return "📝";
+      case "xlsx": case "xls": case "csv": return "📊";
+      case "pptx": case "ppt": return "📎";
+      case "txt": return "📃";
+      default: return "📁";
+    }
+  };
 
   const handleReviseSection = async (sectionIndex: number) => {
     const prompt = revisionPrompts[sectionIndex];
@@ -323,6 +360,45 @@ ${outline.competitorComparison.differentiators.map((diff, i) => `  ${i + 1}) ${d
                     </li>
                   ))}
                 </ul>
+              )}
+
+              {/* 参考資料セレクタ */}
+              {availableMaterials && availableMaterials.length > 0 && onOutlineUpdate && (
+                <div className="mt-3">
+                  <button
+                    onClick={() => toggleMaterialSectionExpand(index)}
+                    className="flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 transition-colors"
+                  >
+                    <span>{expandedMaterialSections[index] ? '▼' : '▶'}</span>
+                    <span>📚 参考資料を選択（任意）</span>
+                    {section.referenceMaterialIds && section.referenceMaterialIds.length > 0 && (
+                      <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full font-semibold">
+                        {section.referenceMaterialIds.length}件選択中
+                      </span>
+                    )}
+                  </button>
+                  {expandedMaterialSections[index] && (
+                    <div className="mt-2 p-3 bg-amber-50 rounded-lg border border-amber-200 space-y-1">
+                      <p className="text-xs text-amber-700 mb-2">このH2で活用する参考資料を選択してください。選択した資料の情報が執筆時に自然に盛り込まれます。</p>
+                      {availableMaterials.map(function(material) {
+                        const sectionIds = section.referenceMaterialIds || [];
+                        const isChecked = sectionIds.indexOf(material.id) !== -1;
+                        return (
+                          <label key={material.id} className="flex items-center gap-2 cursor-pointer hover:bg-amber-100 rounded px-2 py-1 transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => handleToggleSectionMaterial(index, material.id)}
+                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-sm">{getFileIcon(material.fileType)}</span>
+                            <span className="text-sm text-gray-700">{material.title || material.originalFileName}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* H2ブロック修正プロンプト */}
