@@ -8,6 +8,42 @@ import { curriculumDataService } from './curriculumDataService';
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
 const genAI = new GoogleGenerativeAI(API_KEY!);
 
+/**
+ * Gemini API呼び出しを503/429等のリトライ可能エラー時に指数バックオフで再試行するヘルパー
+ * 503（過負荷）, 429（レート制限）, ネットワークエラー時に最大3回リトライ
+ */
+async function callGeminiWithRetry<T>(
+  fn: () => Promise<T>,
+  context: string,
+  maxRetries: number = 3
+): Promise<T> {
+  let lastError: any = null;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      const msg = err && err.message ? String(err.message) : String(err);
+      const isRetryable =
+        msg.indexOf('503') !== -1 ||
+        msg.indexOf('429') !== -1 ||
+        msg.indexOf('overloaded') !== -1 ||
+        msg.indexOf('high demand') !== -1 ||
+        msg.indexOf('UNAVAILABLE') !== -1 ||
+        msg.indexOf('RESOURCE_EXHAUSTED') !== -1 ||
+        msg.toLowerCase().indexOf('fetch') !== -1;
+      if (!isRetryable || attempt === maxRetries) {
+        break;
+      }
+      const delayMs = Math.min(1000 * Math.pow(2, attempt), 16000) + Math.floor(Math.random() * 500);
+      console.warn(`⚠️ [${context}] リトライ可能エラー (${attempt}/${maxRetries}): ${msg.slice(0, 120)}`);
+      console.warn(`   ${delayMs}ms 後に再試行します...`);
+      await new Promise(function(resolve) { return setTimeout(resolve, delayMs); });
+    }
+  }
+  throw lastError;
+}
+
 interface CheckRequest {
   article: string;
   outline: string;
@@ -291,9 +327,12 @@ ${request.keyword}
 }
 `;
 
-    const result = await model.generateContent(prompt);
+    const result = await callGeminiWithRetry(
+      function() { return model.generateContent(prompt); },
+      'writingCheckerV3'
+    );
     const response = result.response.text();
-    
+
     try {
       const checkResult = JSON.parse(response) as CheckResult;
 
