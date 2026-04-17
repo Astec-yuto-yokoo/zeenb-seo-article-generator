@@ -168,6 +168,79 @@ BOX_FOLDER_ID                          # BOX画像フォルダID
 - `components/ArticleWriter.tsx` — 記事プレビュー下に折りたたみ式「H2セクション単位で修正」パネル
 - 修正後は `fixWordPressListBlocks()` / `fixWordPressTableBlocks()` で自動整形
 
+## 参考資料（H2別選択・執筆反映）
+
+### データフロー
+```
+types.ts: OutlineSectionV2.referenceMaterialIds?: string[]
+  → OutlineDisplayV2.tsx: 各H2下に参考資料チェックボックスUI（expandedMaterialSections state）
+  → App.tsx: referenceMaterialIds → availableMaterials（ReferenceMaterial[]）でID→名前変換
+     → sectionReferenceMaterials: Record<number, string[]> を ArticleWriter.tsx に渡す
+  → ArticleWriter.tsx: WritingRequest.sectionReferenceMaterials として generateArticleV3() に渡す
+  → writingAgentV3.ts: buildSectionRefMaterialText() でH2別プロンプト指示文を生成
+     → プロンプトに「H2-N: 「資料名」の情報を重点的に活用」として注入
+```
+
+### 必須ルール
+- `OutlineSectionV2` に `referenceMaterialIds?: string[]` が必須（`types.ts` で定義）
+- `buildSectionRefMaterialText()` を削除・無効化してはならない
+- 参考資料が設定されている場合、プロンプトに「最低でも3箇所以上を記事本文に反映」ルールが自動追加される
+- `writingCheckerV3.ts` の `countSourceCitations()` で `<p class="source-citation">` タグの数を検証し、不足時は最大-15点のペナルティを適用
+
+## スラッグ生成
+
+- `ArticleDisplay.tsx` の `handleOpenImageGenerator` は **async関数** でなければならない
+- スラッグ未設定時は `generateSlug(keyword)` を呼び出してGeminiがキーワードを英訳したslugを生成
+- **`"auto-generated"` 文字列をフォールバック値として使用することは禁止**（フォールバックは `"post"` を使う）
+- `slugGenerator.ts` を削除・無効化してはならない
+
+```typescript
+// ✅ 正しい実装
+let slug = (article as any).slug as string | undefined;
+if (!slug) {
+  try { slug = await generateSlug(keyword); }
+  catch (e) { slug = "post"; }
+}
+```
+
+## Gemini API リトライ処理
+
+- `writingAgentV3.ts` に `callGeminiWithRetry<T>(fn, context, maxRetries=3)` が実装されている
+- 503 / 429 / UNAVAILABLE / overloaded エラーを自動リトライ（指数バックオフ、最大16秒）
+- **この関数を削除・無効化してはならない**
+- すべてのGemini API呼び出しはこの関数でラップすること
+
+```typescript
+// ✅ 正しい使用例
+const result = await callGeminiWithRetry(
+  () => model.generateContent(prompt),
+  "セクション執筆"
+);
+```
+
+## 最終校閲マルチエージェント（速度設定）
+
+`MultiAgentOrchestrator` のインスタンス化時に以下を **必ず** 指定すること（`ArticleWriter.tsx` 内に2箇所）:
+
+```typescript
+const orchestrator = new MultiAgentOrchestrator({
+  // ...他のオプション...
+  enableMoA: false,             // MoA相互検証スキップ（時短）
+  enableSelfEvaluation: false,  // 自己評価ループスキップ（時短）
+});
+```
+
+- `enableMoA: true` にすると Gemini + GPT-5 + Claude の3モデル相互検証が走り処理時間が大幅増加
+- `enableSelfEvaluation: true` にすると各エージェントの自己評価ループが走り処理時間が大幅増加
+- **両者ともデフォルト `false` を維持すること**（明示的な承認なしに変更禁止）
+
+## 出典数チェック（writingCheckerV3）
+
+- `countSourceCitations(article)` — `<p class="source-citation">` タグを正規表現でカウント（AI非依存・決定論的）
+- `minSourceCitations` — `ArticleWriter.tsx` で文字数に応じて自動算出（6000字以上→3, 3000字以上→2, それ以下→1）
+- チェック結果は `CheckResult.sourceCitationStats: SourceCitationStats` に格納
+- 出典数が `minSourceCitations` 未満の場合、スコアから最大-15点を減算
+
 ## 処理フロー
 
 ```
@@ -175,15 +248,18 @@ BOX_FOLDER_ID                          # BOX画像フォルダID
   → 競合調査（competitorResearchWithWebFetch → scraping-server）
   → 構成生成V2（outlineGeneratorV2 → outlineCheckerV2）
   → [任意] 構成案H2修正（reviseOutlineSection）
+  → [任意] 構成案H2別参考資料選択（OutlineDisplayV2の参考資料チェックボックス）
   → [自動] BOX画像取得（boxImageService → /api/box-images）
   → 執筆（writingAgentV3: Gemini 2.5 Pro + Grounding、目標5000〜6000文字、BOX画像自動挿入）
-  → 執筆チェック（writingCheckerV3）
+      ※ H2別参考資料が設定されている場合、buildSectionRefMaterialText()でプロンプトに注入
+  → 執筆チェック（writingCheckerV3: 出典数チェック含む）
   → [任意] 本文H2修正（reviseArticleH2Section）
-  → 最終校閲マルチエージェント
+  → 最終校閲マルチエージェント（enableMoA:false / enableSelfEvaluation:false）
       Phase 1（並列）: 7専門エージェント
       Phase 2（順次）: 出典エージェント3個
       Phase 3（統合）: IntegrationAgent（75点以上で合格）
   → 記事修正（人間確認後ボタン押下時のみ）
+  → 画像生成エージェント起動（スラッグ: generateSlug()で英訳）
 ```
 
 ## Google Drive ADC認証
@@ -225,6 +301,34 @@ BOXに保存された画像を記事生成時にAIが自動選択・挿入する
 | apaman-seo-article-generator | 5176 | 3001 | 5177 |
 
 - バックエンドポートのハードコード箇所が多数あるため、ポート変更時はサービスファイル全体を `localhost:旧ポート` で検索して漏れなく置換すること
+
+### 3プロジェクト共通反映ルール（必読）
+
+以下の機能・ロジックを修正した場合、**他2プロジェクトにも必ず同等の修正を適用すること**。ポート番号・ブランド名は各プロジェクト固有なのでそのまま維持し、ロジック部分のみ反映する。
+
+**共通反映が必要な機能一覧:**
+- [ ] 参考資料選択UI（`OutlineDisplayV2.tsx` の参考資料セレクタ）
+- [ ] 参考資料のH2別活用（`writingAgentV3.ts` の `sectionReferenceMaterials` / `buildSectionRefMaterialText()`）
+- [ ] スラッグ生成（`ArticleDisplay.tsx` の `generateSlug()` 呼び出し、`slugGenerator.ts`）
+- [ ] WordPress互換フォーマット（`fixWordPressListBlocks()` / `fixWordPressTableBlocks()`）
+- [ ] 最終校閲マルチエージェント（`finalProofreadingAgents/` 配下）
+- [ ] 執筆品質チェック（`writingCheckerV3.ts`）
+- [ ] 記事修正機能（`articleRevisionService.ts`）
+- [ ] 型定義の共通フィールド（`types.ts` の `OutlineSectionV2` 等）
+- [ ] 画像生成エージェント連携（`useImageAgent.ts`、`ImageGeneratorIframe.tsx`）
+
+**反映手順:**
+1. 修正完了後、上記一覧に該当するか確認
+2. 該当する場合、他2プロジェクトの同一ファイルを開いて差分を確認
+3. ロジック部分のみ移植（ポート番号・ブランド固有の文言はそのまま維持）
+4. 各プロジェクトで `npx vite build` が通ることを確認
+
+**反映不要（プロジェクト固有）:**
+- ポート番号（5176/3001/5177 等）
+- ブランド名・サービス名・会社名
+- ヒートステアリング設定（factory固有）
+- 見出し番号ルール（プロジェクトごとに異なる）
+- 執筆モードの選択肢（V1/V2/V3の有無はプロジェクトごと）
 
 ## WordPress ブロックエディタ互換
 
