@@ -25,6 +25,7 @@ import {
   reviseSpecificIssue,
   reviseBatchIssues,
   reviseArticleH2Section,
+  insertSourcesAfterRevision,
 } from "../services/articleRevisionService";
 import { testArticle, testOutline } from "../testData/sampleArticle";
 import type { ProofreadingReport } from "../types/proofreading";
@@ -1326,6 +1327,39 @@ ${
     if (totalProblems === 0) {
       console.log("✅ 修正すべき問題がありません");
 
+      // 修正問題がなくても出典挿入は実行する
+      let finalArticle = articleContent;
+      if (proofreadResult.sourceInsertions && proofreadResult.sourceInsertions.length > 0) {
+        console.log(`📌 問題なしだが出典挿入を実行: ${proofreadResult.sourceInsertions.length}件`);
+        try {
+          const articleWithSources = await insertSourcesAfterRevision(
+            articleContent,
+            proofreadResult.sourceInsertions
+          );
+          finalArticle = cleanupArticleContent(articleWithSources);
+          setEditedContent(finalArticle);
+          if (article) {
+            const updatedArticle = {
+              ...article,
+              htmlContent: finalArticle,
+              plainText: finalArticle.replace(/<[^>]*>/g, ""),
+            };
+            setArticle(updatedArticle);
+            if (onArticleGenerated) {
+              onArticleGenerated({
+                title: updatedArticle.title,
+                metaDescription: updatedArticle.metaDescription,
+                htmlContent: updatedArticle.htmlContent,
+                plainText: updatedArticle.plainText,
+              });
+            }
+          }
+          console.log("✅ 出典挿入完了");
+        } catch (error) {
+          console.error("⚠️ 出典挿入エラー（記事はそのまま続行）:", error);
+        }
+      }
+
       // スコアタイプに応じて分岐
       if (scoreType === "high-score") {
         // 75点以上: 問題なしなら直接画像生成
@@ -1335,14 +1369,14 @@ ${
           keyword,
           article,
           outline,
-          articleContent,
+          finalArticle,
           onAutoComplete,
           onOpenImageAgent
         );
       } else {
         // 70-74点: 問題なしでも再校閲が必要
         console.log("📋 70-74点で問題なし → 再校閲を実行");
-        await performReProofread(articleContent, scoreType, 0);
+        await performReProofread(finalArticle, scoreType, 0);
       }
       return;
     }
