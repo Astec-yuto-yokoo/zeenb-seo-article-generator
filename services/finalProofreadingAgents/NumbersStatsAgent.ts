@@ -7,7 +7,7 @@ export class NumbersStatsAgent extends BaseProofreadingAgent {
     super(
       "数値・統計確認エージェント",
       "numbers-stats",
-      "gpt-5-nano" // 高速処理用の軽量モデル
+      "gpt-5-mini" // 精度向上のためminiへアップグレード
     );
   }
 

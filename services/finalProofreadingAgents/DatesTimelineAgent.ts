@@ -4,7 +4,7 @@ import type { Issue, Suggestion } from "./types";
 
 export class DatesTimelineAgent extends BaseProofreadingAgent {
   constructor() {
-    super("日付・時系列検証エージェント", "dates-timeline", "gpt-5-nano");
+    super("日付・時系列検証エージェント", "dates-timeline", "gpt-5-mini");
   }
 
   protected async performCheck(

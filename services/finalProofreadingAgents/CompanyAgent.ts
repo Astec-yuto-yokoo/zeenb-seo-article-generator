@@ -7,7 +7,7 @@ export class CompanyAgent extends BaseProofreadingAgent {
     super(
       'サービス専門エージェント',
       'company',
-      'gpt-5-nano'
+      'gpt-5-mini'
     );
   }
 
