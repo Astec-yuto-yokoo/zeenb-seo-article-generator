@@ -2576,7 +2576,7 @@ ${
                           {extractH2Headings(editedContent).map((heading, idx) => (
                             <div key={idx} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
                               <p className="text-sm font-semibold text-blue-800 mb-2">
-                                H2-{idx + 1}: {heading}
+                                {idx + 1}. {heading}
                               </p>
                               <div className="flex gap-2">
                                 <textarea

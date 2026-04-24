@@ -105,7 +105,7 @@ const OutlineDisplayV2: React.FC<OutlineDisplayV2Props> = ({ outline, keyword, o
       });
     } catch (error) {
       const msg = error instanceof Error ? error.message : '修正に失敗しました';
-      setRevisionError(`H2-${sectionIndex + 1}: ${msg}`);
+      setRevisionError(`${sectionIndex + 1}. ${msg}`);
     } finally {
       setRevisingSection(null);
     }
@@ -165,11 +165,11 @@ ${outline.introductions.empathy}
 ## 構成本体
 
 ${outline.outline.map((section, index) => `
-### H2-${index + 1}：${section.heading}
+### ${index + 1}. ${section.heading}
 - 画像提案：${section.imageSuggestion}
 - 執筆メモ：${section.writingNote}
 ${section.subheadings.map((sub, subIndex) => `
-  - **H3-${subIndex + 1}**：${sub.text} — 執筆メモ：${sub.writingNote || '未設定'}`).join('\n')}
+  - **${index + 1}-${subIndex + 1}.** ${sub.text} — 執筆メモ：${sub.writingNote || '未設定'}`).join('\n')}
 `).join('\n')}
 
 ## 競合比較サマリ（上位10記事）
@@ -320,7 +320,7 @@ ${outline.competitorComparison.differentiators.map((diff, i) => `  ${i + 1}) ${d
             <div key={index} className="border-l-4 border-blue-400 pl-4 space-y-3">
               <div>
                 <h4 className="font-bold text-lg text-gray-800">
-                  <span className="text-blue-600 mr-2">H2-{index + 1}:</span>
+                  <span className="text-blue-600 mr-2">{index + 1}.</span>
                   {section.heading}
                 </h4>
 
@@ -349,7 +349,7 @@ ${outline.competitorComparison.differentiators.map((diff, i) => `  ${i + 1}) ${d
                   {section.subheadings.map((sub, subIndex) => (
                     <li key={subIndex} className="space-y-1">
                       <div className="flex items-start gap-2">
-                        <span className="text-blue-600 font-semibold">H3-{subIndex + 1}:</span>
+                        <span className="text-blue-600 font-semibold">{index + 1}-{subIndex + 1}.</span>
                         <span className="text-gray-700">{sub.text}</span>
                       </div>
                       {sub.writingNote && (
@@ -408,7 +408,7 @@ ${outline.competitorComparison.differentiators.map((diff, i) => `  ${i + 1}) ${d
                     <textarea
                       value={revisionPrompts[index] || ''}
                       onChange={(e) => setRevisionPrompts(prev => ({ ...prev, [index]: e.target.value }))}
-                      placeholder={`H2-${index + 1} の修正指示を入力...`}
+                      placeholder={`${index + 1}. の修正指示を入力...`}
                       className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                       rows={2}
                       disabled={revisingSection === index}
@@ -421,7 +421,7 @@ ${outline.competitorComparison.differentiators.map((diff, i) => `  ${i + 1}) ${d
                       {revisingSection === index ? '修正中...' : 'AI修正'}
                     </button>
                   </div>
-                  {revisionError && revisionError.startsWith(`H2-${index + 1}:`) && (
+                  {revisionError && revisionError.startsWith(`${index + 1}. `) && (
                     <p className="mt-1 text-sm text-red-500">{revisionError}</p>
                   )}
                 </div>

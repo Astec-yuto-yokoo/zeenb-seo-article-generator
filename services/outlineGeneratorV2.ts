@@ -1030,9 +1030,9 @@ export async function reviseFullOutline(
 
   const currentOutlineText = outline.outline.map((s, i) => {
     const h3List = s.subheadings.length > 0
-      ? s.subheadings.map((sub, j) => `    H3-${j + 1}: ${sub.text}（メモ: ${sub.writingNote || 'なし'}）`).join('\n')
+      ? s.subheadings.map((sub, j) => `    ${i + 1}-${j + 1}. ${sub.text}（メモ: ${sub.writingNote || 'なし'}）`).join('\n')
       : '    （H3なし）';
-    return `H2-${i + 1}: ${s.heading}\n  執筆メモ: ${s.writingNote}\n  画像提案: ${s.imageSuggestion}\n${h3List}`;
+    return `${i + 1}. ${s.heading}\n  執筆メモ: ${s.writingNote}\n  画像提案: ${s.imageSuggestion}\n${h3List}`;
   }).join('\n\n');
 
   const prompt = `あなたはSEO記事構成の専門家です。以下の構成案全体をユーザーの指示に基づいて修正してください。
@@ -1130,7 +1130,7 @@ export async function reviseOutlineSection(
     throw new Error(`セクション ${sectionIndex} が見つかりません`);
   }
 
-  console.log(`🔧 構成案H2修正開始: H2-${sectionIndex + 1}「${section.heading}」`);
+  console.log(`🔧 構成案H2修正開始: ${sectionIndex + 1}. 「${section.heading}」`);
   console.log(`📝 修正指示: ${userPrompt}`);
 
   const prompt = `あなたはSEO記事構成の専門家です。以下のH2セクションをユーザーの指示に基づいて修正してください。
@@ -1142,14 +1142,14 @@ ${keyword}
 見出し: ${section.heading}
 執筆メモ: ${section.writingNote}
 H3一覧:
-${section.subheadings.map((sub, i) => `  H3-${i + 1}: ${sub.text}（メモ: ${sub.writingNote || 'なし'}）`).join('\n')}
+${section.subheadings.map((sub, i) => `  ${sectionIndex + 1}-${i + 1}. ${sub.text}（メモ: ${sub.writingNote || 'なし'}）`).join('\n')}
 画像提案: ${section.imageSuggestion}
 
 【ユーザーの修正指示】
 ${userPrompt}
 
 【構成全体のH2一覧（文脈把握用）】
-${outline.outline.map((s, i) => `H2-${i + 1}: ${s.heading}`).join('\n')}
+${outline.outline.map((s, i) => `${i + 1}. ${s.heading}`).join('\n')}
 
 【出力ルール】
 - 修正指示に従って、対象H2セクションのみを修正したJSON を返す

@@ -73,6 +73,33 @@ async function callGeminiWithRetry<T>(
   throw lastError;
 }
 
+/**
+ * Geminiの自己訂正・謝罪ハルシネーション検知
+ * モデルが生成途中でトークン破綻を起こし、「すいません、文章の途中で途切れてしまいました。
+ * 以下に正しい文章を生成します」等のメタ発話を本文に混入させるケースを検出する。
+ * 検出時はリトライで再生成する。
+ *
+ * @returns 検出された場合はマッチ文字列、正常なら null
+ */
+function detectHallucinationArtifact(text: string): string | null {
+  if (!text) return null;
+
+  const patterns: RegExp[] = [
+    /(?:すい?ません|申し訳(?:ございません|ありません|ない)|失礼(?:しました|いたしました))[、。\s]{0,5}[^。<>]{0,40}(?:途切れ|途中で|やり直|リセット|先ほど|最初から|生成し直|書き直|もう一度|再度)/,
+    /(?:以下に|以下の|改めて|再度|もう一度)[^。<>]{0,30}(?:正しい|正確な|きちんとした|適切な)(?:文章|記事|内容|もの|形)[^。<>]{0,20}(?:生成|出力|提示|お届け|書き直|作成)/,
+    /もう一度[^。<>]{0,15}(?:最初から|一から)?[^。<>]{0,10}(?:生成|執筆|書き|作成|出力)/,
+    /文章の途中で(?:途切れ|切れ|止まっ)/,
+    /一度(?:リセット|最初から|やり直)/,
+    /先ほどの(?:文章|出力|内容)は[^。<>]{0,20}(?:誤|間違|不適切|途中)/,
+  ];
+
+  for (const re of patterns) {
+    const m = text.match(re);
+    if (m) return m[0];
+  }
+  return null;
+}
+
 // SEOコンテンツ執筆のカスタムインストラクション（三段セルフリファイン + ファクトチェック強化版）
 const WRITING_INSTRUCTIONS = `
 meta:
@@ -1051,14 +1078,32 @@ ${
     }, 10000);
 
     try {
-      const result = await callGeminiWithRetry(
-        function() { return model.generateContent(prompt); },
-        'writingAgentV3'
-      );
+      // ハルシネーション検知＋自動リトライ（最大3回）
+      const maxHallucinationRetries = 3;
+      var text = "";
+      for (let attempt = 1; attempt <= maxHallucinationRetries; attempt++) {
+        const result = await callGeminiWithRetry(
+          function() { return model.generateContent(prompt); },
+          'writingAgentV3'
+        );
+        const candidateText = result.response.text();
+        const artifact = detectHallucinationArtifact(candidateText);
+        if (!artifact) {
+          text = candidateText;
+          break;
+        }
+        console.warn(
+          `⚠️ Geminiの自己訂正ハルシネーションを検出 (試行${attempt}/${maxHallucinationRetries}): "${artifact.slice(0, 60)}"`
+        );
+        if (attempt === maxHallucinationRetries) {
+          clearInterval(progressInterval);
+          throw new Error(
+            `Geminiの生成結果にハルシネーションが混入し、${maxHallucinationRetries}回の再生成でも解消しませんでした。検出文言: "${artifact.slice(0, 80)}"`
+          );
+        }
+        console.warn(`   再生成します...`);
+      }
       clearInterval(progressInterval);
-
-      const response = result.response;
-      var text = response.text();
 
       // 出典テキストをGoogle検索してURLリンクを後付け挿入
       text = await searchAndInsertCitationLinks(text);
@@ -1159,8 +1204,27 @@ ${request.keyword}
 `;
 
     console.log("🔄 セクション執筆中...");
-    const result = await model.generateContent(prompt);
-    let text = result.response.text();
+    // ハルシネーション検知＋自動リトライ（最大3回）
+    const maxHallucinationRetries = 3;
+    let text = "";
+    for (let attempt = 1; attempt <= maxHallucinationRetries; attempt++) {
+      const result = await model.generateContent(prompt);
+      const candidateText = result.response.text();
+      const artifact = detectHallucinationArtifact(candidateText);
+      if (!artifact) {
+        text = candidateText;
+        break;
+      }
+      console.warn(
+        `⚠️ セクション執筆: Geminiの自己訂正ハルシネーションを検出 (試行${attempt}/${maxHallucinationRetries}): "${artifact.slice(0, 60)}"`
+      );
+      if (attempt === maxHallucinationRetries) {
+        throw new Error(
+          `セクション「${sectionName}」の生成にハルシネーションが混入し、${maxHallucinationRetries}回の再生成でも解消しませんでした。検出文言: "${artifact.slice(0, 80)}"`
+        );
+      }
+      console.warn(`   再生成します...`);
+    }
 
     // 出典テキストをGoogle検索してURLリンクを後付け挿入
     text = await searchAndInsertCitationLinks(text);
@@ -1316,7 +1380,7 @@ function buildSectionRefMaterialText(sectionMaterials?: Record<number, string[]>
     const materialNames = sectionMaterials[sectionIndex];
     if (!materialNames || materialNames.length === 0) continue;
     const nameList = materialNames.map(function(name) { return "「" + name + "」"; }).join("、");
-    entries.push("- H2-" + (sectionIndex + 1) + ": " + nameList + " の情報を重点的に活用");
+    entries.push("- " + (sectionIndex + 1) + ". " + nameList + " の情報を重点的に活用");
   }
 
   if (entries.length === 0) return "";

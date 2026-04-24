@@ -297,17 +297,17 @@ function checkHeadingDuplication(outline: SeoOutlineV2): string[] {
       allHeadings.push({
         text: section.title,
         type: 'H2',
-        location: `セクション${sectionIndex + 1}`
+        location: `${sectionIndex + 1}.`
       });
     }
-    
+
     // H3を追加（content配列形式）
     section.content?.forEach((h3Text, subIndex) => {
       if (h3Text) {
         allHeadings.push({
           text: h3Text,
           type: 'H3',
-          location: `セクション${sectionIndex + 1}のH3-${subIndex + 1}`
+          location: `${sectionIndex + 1}-${subIndex + 1}.`
         });
       }
     });

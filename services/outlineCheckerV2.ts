@@ -448,15 +448,15 @@ export function checkOutline(
     allHeadings.push({
       text: section.heading,
       type: 'H2',
-      location: `セクション${sectionIndex + 1}`
+      location: `${sectionIndex + 1}.`
     });
-    
+
     // H3を追加
     section.subheadings.forEach((sub, subIndex) => {
       allHeadings.push({
         text: sub.text,
         type: 'H3',
-        location: `セクション${sectionIndex + 1}のH3-${subIndex + 1}`
+        location: `${sectionIndex + 1}-${subIndex + 1}.`
       });
     });
   });

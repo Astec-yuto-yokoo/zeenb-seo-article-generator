@@ -21,22 +21,22 @@ function parseOutlineMarkdown(markdown: string): Partial<SeoOutline> {
   // 導入文抽出
   const introduction = markdown.match(/## 導入[^\\n]*\n(.+)/)?.[1] || '';
   
-  // H2セクション抽出
-  const h2Regex = /### (H2-\d+)：(.+)\n/g;
+  // H2セクション抽出（新形式: "### 1. 見出し"）
+  const h2Regex = /### (\d+)\.\s+(.+)\n/g;
   const sections: any[] = [];
   let match;
-  
+
   while ((match = h2Regex.exec(markdown)) !== null) {
     const sectionTitle = match[2];
     const sectionStart = match.index + match[0].length;
-    
+
     // 次のH2セクションまでのコンテンツを取得
-    const nextH2Match = markdown.slice(sectionStart).match(/### H2-\d+：/);
+    const nextH2Match = markdown.slice(sectionStart).match(/### \d+\.\s+/);
     const sectionEnd = nextH2Match ? sectionStart + nextH2Match.index : markdown.length;
     const sectionContent = markdown.slice(sectionStart, sectionEnd);
-    
-    // H3サブセクション抽出
-    const h3Regex = /\*\*(H3-\d+)\*\*：(.+?)—/g;
+
+    // H3サブセクション抽出（新形式: "**1-1.** 見出し —"）
+    const h3Regex = /\*\*(\d+-\d+)\.\*\*\s+(.+?)—/g;
     const subsections: any[] = [];
     let h3Match;
     
