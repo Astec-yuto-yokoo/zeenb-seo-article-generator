@@ -2627,7 +2627,11 @@ ${
                 </h3>
                 <div className="space-y-2">
                   {(outline.outline || outline.sections || []).map(
-                    (section, index) => (
+                    (section, index) => {
+                      const sectionMaterials = sectionReferenceMaterials && sectionReferenceMaterials[index]
+                        ? sectionReferenceMaterials[index]
+                        : [];
+                      return (
                       <div key={index} className="bg-white p-3 rounded-lg border border-gray-200">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
@@ -2640,6 +2644,20 @@ ${
                                   {section.subheadings.length}個のH3
                                 </p>
                               )}
+                            {sectionMaterials.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {sectionMaterials.map((name, i) => (
+                                  <span
+                                    key={i}
+                                    title={"参考資料として使用: " + name}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-300 rounded text-xs text-amber-800"
+                                  >
+                                    <span aria-hidden="true">📎</span>
+                                    <span className="truncate max-w-[160px]">{name}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                           <button
                             onClick={() => handleRegenerateSection(index)}
@@ -2652,7 +2670,8 @@ ${
                           </button>
                         </div>
                       </div>
-                    )
+                      );
+                    }
                   )}
                 </div>
 

@@ -320,7 +320,6 @@ ${outline.competitorComparison.differentiators.map((diff, i) => `  ${i + 1}) ${d
             <div key={index} className="border-l-4 border-blue-400 pl-4 space-y-3">
               <div>
                 <h4 className="font-bold text-lg text-gray-800">
-                  <span className="text-blue-600 mr-2">{index + 1}.</span>
                   {section.heading}
                 </h4>
 
@@ -349,7 +348,6 @@ ${outline.competitorComparison.differentiators.map((diff, i) => `  ${i + 1}) ${d
                   {section.subheadings.map((sub, subIndex) => (
                     <li key={subIndex} className="space-y-1">
                       <div className="flex items-start gap-2">
-                        <span className="text-blue-600 font-semibold">{index + 1}-{subIndex + 1}.</span>
                         <span className="text-gray-700">{sub.text}</span>
                       </div>
                       {sub.writingNote && (

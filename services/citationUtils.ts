@@ -42,12 +42,12 @@ function isCompanyMediaUrl(url: string): boolean {
  * ```ts
  * // 環境変数 VITE_COMPANY_NOTE_URL=note.com/yourcompany の場合
  * buildCitationLink('https://note.com/yourcompany/n/abc123', '事例インタビュー')
- * // => '（出典：<a href="https://note.com/yourcompany/n/abc123" target="_blank" rel="noopener noreferrer">事例インタビュー</a>）'
+ * // => '<small>（出典：<a href="https://note.com/yourcompany/n/abc123" target="_blank" rel="noopener noreferrer">事例インタビュー</a>）</small>'
  * ```
  */
 export function buildCitationLink(url: string, title: string): string {
-  // すべてのURLをaタグ形式で出力
-  return `（出典：<a href="${url}" target="_blank" rel="noopener noreferrer">${title}</a>）`;
+  // 注釈サイズで表示するため<small>で囲む
+  return `<small>（出典：<a href="${url}" target="_blank" rel="noopener noreferrer">${title}</a>）</small>`;
 }
 
 /**

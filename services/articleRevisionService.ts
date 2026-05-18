@@ -25,8 +25,9 @@ function getCitationPriorityRules(): string {
     return `## 出典URL優先順位ルール（厳守）
 - 【優先順位】自社一次情報（note等）> 自社メディア記事 > 外部ソース
 - 【自社URL】必ずaタグで埋め込み（ベタ貼り禁止）
-  - 形式：（出典：<a href="https://..." target="_blank" rel="noopener noreferrer">タイトル</a>）
-- 【外部URL】出典として使う場合はaタグ、内部リンクとしてのベタ貼りは別途保護`;
+  - 形式：<small>（出典：<a href="https://..." target="_blank" rel="noopener noreferrer">タイトル</a>）</small>
+- 【外部URL】出典として使う場合はaタグ、内部リンクとしてのベタ貼りは別途保護
+- 【表示サイズ】出典は必ず<small>タグで囲み、注釈サイズで表示する`;
   }
 
   const noteRule = COMPANY_NOTE_URL
@@ -39,10 +40,11 @@ function getCitationPriorityRules(): string {
   return `## 出典URL優先順位ルール（厳守）
 - 【優先順位】${noteRule} > ${mediaRule}
 - 【note URL】必ずaタグで埋め込み（ベタ貼り禁止）
-  - 形式：（出典：<a href="https://..." target="_blank" rel="noopener noreferrer">タイトル</a>）
+  - 形式：<small>（出典：<a href="https://..." target="_blank" rel="noopener noreferrer">タイトル</a>）</small>
 - 【media URL】出典として使う場合はaタグ、内部リンクとしてのベタ貼りは別途保護
 - 【フォールバック】noteがない場合のみ自社メディアを使用
-- 【両方ある場合】必ずnoteを優先的に採用`;
+- 【両方ある場合】必ずnoteを優先的に採用
+- 【表示サイズ】出典は必ず<small>タグで囲み、注釈サイズで表示する`;
 }
 
 // 内部リンク保護ルールを動的に生成
@@ -128,7 +130,7 @@ meta:
 - 見出し後：必ず<p>タグから開始
 - 改行処理：<p>タグ内での<br>は使用しない（段落分けは<p>タグで）
 - リスト：3項目以上は<ul>または<ol>タグを使用
-- 出典：段落末尾に（出典：<a href="URL">タイトル</a>）形式
+- 出典：段落末尾に<small>（出典：<a href="URL">タイトル</a>）</small>形式（必ず<small>タグで注釈サイズ化）
 
 ## リード文の構成（200-350字）
 1. 読者の悩みを代弁
@@ -153,7 +155,7 @@ meta:
 - 原則dofollow（信頼できるサイトへのリンク）
 - 一次情報を優先（公式/省庁/学協会/大手メディア/自社資料）
 - 本文近傍に出典を明示（タイトル/組織名の自然文アンカー）
-- HTML形式：（出典：<a href="URL" target="_blank" rel="noopener noreferrer">タイトル</a>）
+- HTML形式：<small>（出典：<a href="URL" target="_blank" rel="noopener noreferrer">タイトル</a>）</small>（必ず<small>タグで注釈サイズ化）
 - 内部リンク：用語集や関連ページへ自然な導線を挿入
 - アンカーテキスト：クリック後の内容を正確に表す自然文
 
@@ -263,10 +265,11 @@ meta:
 ## 出典URL優先順位ルール（厳守）
 - 【優先順位】自社一次情報（note等）> 自社メディア記事 > 外部ソース
 - 【自社URL】必ずaタグで埋め込み（ベタ貼り禁止）
-  - 形式：（出典：<a href="https://..." target="_blank" rel="noopener noreferrer">タイトル</a>）
+  - 形式：<small>（出典：<a href="https://..." target="_blank" rel="noopener noreferrer">タイトル</a>）</small>
 - 【外部URL】出典として使う場合はaタグ、内部リンクとしてのベタ貼りは別途保護
 - 【フォールバック】noteがない場合のみ自社メディアを使用
 - 【両方ある場合】必ず自社一次情報を優先的に採用
+- 【表示サイズ】出典は必ず<small>タグで囲み、注釈サイズで表示する
 
 ## 内部リンク戦略
 - 関連する用語集ページへのリンク
@@ -695,7 +698,7 @@ ${originalArticle}
 12. 自社実績を適切に活用する（Before→After形式）
 13. 他の部分との整合性を保つ
 14. HTMLタグは適切に維持する
-15. 出典が必要な場合はHTML形式で追加する：（出典：<a href="URL" target="_blank" rel="noopener noreferrer">タイトル</a>）
+15. 出典が必要な場合はHTML形式で追加する：<small>（出典：<a href="URL" target="_blank" rel="noopener noreferrer">タイトル</a>）</small>（必ず<small>タグで注釈サイズ化）
 16. AIらしさを徹底回避（NGワード置換、語尾変化、新情報追加）
 17. 研究ポリシーの優先順位を守る（省庁→学協会→企業IR→大手メディア→自社資料）
 18. logic_methodsを活用（SDS、PREP（連打禁止）、Q→A→Why→How）
@@ -919,7 +922,7 @@ export async function insertSourcesAfterRevision(
       .filter((s) => s.elementIndex !== undefined)
       .map((s) => ({
         elementIndex: s.elementIndex!,
-        sourceHtml: `<p>（出典：<a href="${s.url}" target="_blank" rel="noopener noreferrer">${s.title}</a>）</p>`,
+        sourceHtml: `<p><small>（出典：<a href="${s.url}" target="_blank" rel="noopener noreferrer">${s.title}</a>）</small></p>`,
       }));
 
     // 🎯 デバッグログ：要素番号ベースの挿入データ
@@ -973,7 +976,7 @@ export async function insertSourcesAfterRevision(
     });
 
     // 統一フォーマットで出典HTMLを作成
-    const sourceHtml = `<p>（出典：<a href="${source.url}" target="_blank" rel="noopener noreferrer">${source.title}</a>）</p>`;
+    const sourceHtml = `<p><small>（出典：<a href="${source.url}" target="_blank" rel="noopener noreferrer">${source.title}</a>）</small></p>`;
 
     // H3があるかどうかで判定
     let targetHeading: string;
@@ -1322,7 +1325,7 @@ ${originalArticle}
 4. 見出しを追加しない
 5. CTAタグ（[cta]など）を追加しない
 6. 元の文章形式（HTMLタグがあれば保持）を維持
-7. 出典がある場合は（出典：<a href="URL">タイトル</a>）形式で追加
+7. 出典がある場合は<small>（出典：<a href="URL">タイトル</a>）</small>形式で追加（必ず<small>タグで注釈サイズ化）
 
 【出力】
 修正後の文章のみを出力。説明や前置きは不要。

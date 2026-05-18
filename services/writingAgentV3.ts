@@ -293,11 +293,12 @@ citation:
   policy: "一次情報を優先（公式/省庁/学協会/大手メディア/自社資料）"
   format: |
     出典の表記は必ず以下の統一フォーマットで記載すること（リンク不要・テキストのみ）：
-    <p class="source-citation">※出典元：出典ページタイトル（組織名・年）</p>
-    - Web情報 → 上記フォーマットでテキストのみ記載（URLリンクは付けない）
-    - 参考資料（自社資料・添付PDF等）から引用 → <p class="source-citation">※出典元：自社資料「資料タイトル」</p>
+    <p class="source-citation"><small>※出典元：出典ページタイトル（組織名・年）</small></p>
+    - Web情報・公的機関・調査結果 → 上記フォーマットでテキストのみ記載（URLリンクは付けない）
+    - 【重要・厳守】参考資料（自社資料・添付PDF等）から得た情報については、出典として記載しないこと。自社資料の情報は本文に自然に織り込むのみで、「※出典元：自社資料〜」「※出典元：自社調査〜」などの記載は禁止
     - 出典は引用した段落の直後に配置すること（段落末でなく、独立した<p>タグで記載）
     - 【重要】<a>タグやhref属性は一切使用しないこと。出典名のテキストのみ記載する
+    - 【表示サイズ】出典は必ず<small>タグで囲み、注釈サイズで表示する
   rules: |
     ■ 統計・法令・制度・調査結果を引用した箇所には必ず出典を付けること。出典の省略は禁止。
     ■ 記事全体で最低3箇所以上の出典を記載すること。
@@ -946,7 +947,7 @@ ${request.referenceMaterialContext}
 3. 「専門的知見・ノウハウ」→ 解説の中で「実務上のポイントとして〜」など、経験に基づく情報として自然に織り込む
 4. 「FAQ・よくある課題」→ FAQセクションや関連H2の中で読者の疑問として取り上げる
 5. 「記事への活用提案」→ この提案内容を参考に、各セクションへ自然に分散して配置する
-6. 引用した箇所の直後に出典を記載: <p class="source-citation">※出典元：自社資料「資料タイトル」</p>
+6. 【重要・厳守】自社資料から引用した情報には、出典記載（※出典元：自社資料〜 等）を付けないこと。自然に本文に織り込むのみとする
 7. 上記の参考資料情報のうち、最低でも3箇所以上を記事本文に反映すること。反映ゼロは禁止
 `;
       console.log(`✅ [1.8/4] 完了: 参考資料注入 (${request.referenceMaterialContext.length}文字)`);
@@ -1105,6 +1106,9 @@ ${
       }
       clearInterval(progressInterval);
 
+      // 自社資料の出典記載を削除（AIが指示に反して出力した場合の保険）
+      text = removeSelfDataCitations(text);
+
       // 出典テキストをGoogle検索してURLリンクを後付け挿入
       text = await searchAndInsertCitationLinks(text);
 
@@ -1226,6 +1230,9 @@ ${request.keyword}
       console.warn(`   再生成します...`);
     }
 
+    // 自社資料の出典記載を削除（AIが指示に反して出力した場合の保険）
+    text = removeSelfDataCitations(text);
+
     // 出典テキストをGoogle検索してURLリンクを後付け挿入
     text = await searchAndInsertCitationLinks(text);
 
@@ -1238,6 +1245,32 @@ ${request.keyword}
     console.error(`❌ セクション執筆エラー (${elapsed}秒後):`, error);
     throw error;
   }
+}
+
+// ===== 自社資料の出典記載を削除する関数 =====
+
+/**
+ * 記事HTMLから「※出典元：自社資料〜」「※出典元：自社調査〜」等の自社資料系の出典記載を削除する。
+ * AIが指示に反して自社資料を出典として記載した場合の保険として動作する。
+ *
+ * 削除対象パターン:
+ * - <p class="source-citation">...※出典元：自社資料「〜」...</p>
+ * - <p class="source-citation">...※出典元：自社調査...</p>
+ * - <p class="source-citation">...※出典元：当社〜...</p>
+ */
+function removeSelfDataCitations(text: string): string {
+  let removedCount = 0;
+  const selfDataPattern = /<p class="source-citation">[\s\S]*?(?:自社資料|自社調査|当社調査|当社の|自社の)[\s\S]*?<\/p>\s*/g;
+  const result = text.replace(selfDataPattern, function(match) {
+    removedCount++;
+    return "";
+  });
+
+  if (removedCount > 0) {
+    console.log("\n🗑️ 自社資料の出典記載を " + removedCount + "件削除しました");
+  }
+
+  return result;
 }
 
 // ===== 出典URL検索・リンク挿入機能（Google Custom Search API方式） =====
@@ -1256,7 +1289,7 @@ import { searchGoogle } from "./googleSearchService";
  */
 async function searchAndInsertCitationLinks(text: string): Promise<string> {
   // 出典タグを全件抽出
-  const citationRegex = /<p class="source-citation">※出典元：(.+?)<\/p>/g;
+  const citationRegex = /<p class="source-citation">(?:<small>)?※出典元：(.+?)(?:<\/small>)?<\/p>/g;
   const citations: Array<{ fullMatch: string; content: string }> = [];
 
   let regexMatch = citationRegex.exec(text);
@@ -1326,7 +1359,7 @@ async function searchAndInsertCitationLinks(text: string): Promise<string> {
 
     if (url) {
       linkedCount++;
-      const linkedTag = '<p class="source-citation">※出典元：<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + citation.content + '</a></p>';
+      const linkedTag = '<p class="source-citation"><small>※出典元：<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + citation.content + '</a></small></p>';
       resultText = resultText.replace(citation.fullMatch, linkedTag);
     }
   }
@@ -1387,7 +1420,7 @@ function buildSectionRefMaterialText(sectionMaterials?: Record<number, string[]>
 
   return "\n【H2セクション別 参考資料活用指示（重要）】\n" +
     "以下のH2セクションでは、指定された参考資料の情報を自然な形で本文に盛り込んでください。\n" +
-    "引用した箇所の直後に <p class=\"source-citation\">※出典元：自社資料「資料タイトル」</p> を記載すること。\n\n" +
+    "【厳守】自社資料から得た情報には、出典記載（※出典元：自社資料〜 等）を付けないこと。本文に自然に織り込むのみとする。\n\n" +
     entries.join("\n") + "\n\n" +
     "※ 指定のないH2セクションでは、参考資料の強制的な反映は不要です（文脈に合えば自然に活用してもよい）。\n";
 }

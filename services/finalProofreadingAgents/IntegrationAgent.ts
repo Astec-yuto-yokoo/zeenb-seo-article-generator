@@ -356,7 +356,7 @@ ${verifiedUrlsForReport.length > 0 && verifiedUrlsForReport.filter((u: any) => u
 ${verifiedUrlsForReport.filter((u: any) => u.status === 'ok').map((u: any) => {
   const heading = u.location || '<h2>該当見出し</h2>';
   return `${heading} セクションの末尾に：
-<p>（出典：<a href="${u.url}" target="_blank" rel="noopener noreferrer">${u.title || 'リンク'}</a>）</p>`;
+<p><small>（出典：<a href="${u.url}" target="_blank" rel="noopener noreferrer">${u.title || 'リンク'}</a>）</small></p>`;
 }).join('\n\n')}
 
 ※注意：各出典は該当セクションの本文が終わった後、次の<h2>タグの直前に配置してください。`

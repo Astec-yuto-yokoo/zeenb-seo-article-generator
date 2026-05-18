@@ -316,6 +316,7 @@ BOXに保存された画像を記事生成時にAIが自動選択・挿入する
 - [ ] 記事修正機能（`articleRevisionService.ts`）
 - [ ] 型定義の共通フィールド（`types.ts` の `OutlineSectionV2` 等）
 - [ ] 画像生成エージェント連携（`useImageAgent.ts`、`ImageGeneratorIframe.tsx`）
+- [ ] 構成案表示フォーマット（`OutlineDisplayV2.tsx` のH2/H3見出し表示。`H2-{index+1}:` や `{index+1}.` 等のUI側プレフィックスは付与せず、Gemini生成の見出しテキストをそのまま表示する）
 
 **反映手順:**
 1. 修正完了後、上記一覧に該当するか確認

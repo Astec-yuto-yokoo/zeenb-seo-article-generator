@@ -90,6 +90,20 @@ code {
   margin: 5px 0;
 }
 
+/* 出典（注釈サイズ） */
+.article-content small,
+.article-content .source-citation {
+  font-size: 0.8em;
+  color: #6b7280;
+}
+
+.article-content .source-citation a,
+.article-content small a {
+  font-size: inherit;
+  color: inherit;
+  text-decoration: underline;
+}
+
 /* 記事内テーブルスタイル */
 .article-content table {
   width: 100%;
