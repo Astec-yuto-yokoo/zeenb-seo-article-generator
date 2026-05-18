@@ -388,9 +388,14 @@ function classifyVisualCategory(h2Text: string, paragraphText: string): VisualCa
 // カテゴリ別のSUBJECT・SETTING・COMPOSITIONガイド
 const CATEGORY_PROMPTS: Record<VisualCategory, string> = {
   "construction-site": `VISUAL CATEGORY: Construction / Painting Site
-SUBJECT GUIDANCE: Depict an active or completed construction/painting scene. Show the building wrapped in mesh sheets, workers in safety gear, or freshly painted surfaces. Focus on the WORK PROCESS or RESULT.
-SETTING: Japanese residential neighborhood, apartment or house exterior with scaffolding, clear blue sky above.
-COMPOSITION: Wide-angle (24-35mm) to show the full building and scaffolding coverage. Eye-level or slightly elevated angle. Maximum 2 workers visible.`,
+SUBJECT GUIDANCE: Depict an active or completed construction/painting scene. Pick ONE composition that fits the heading:
+  (a) WRAPPED BUILDING (no worker close-up): Wide-angle view of the building fully enclosed in gray/white mesh splash-prevention sheets on scaffolding — uniform, unbroken sheet covering every facade. Best when no worker needs to be shown.
+  (b) WORKER SEEN THROUGH MESH (exterior view with worker): Wide shot from outside the scaffolding. A worker is faintly visible THROUGH the translucent mesh sheet as a soft silhouette — the sheet remains COMPLETELY INTACT in front of them.
+  (c) INSIDE THE SCAFFOLDING (worker close-up): Camera positioned INSIDE the scaffolding next to the worker. Foreground: building wall being painted. Mid-frame: the worker (clearly visible). Background: the mesh splash-prevention sheet acting as a translucent wall, with soft outdoor light filtering through and blurred silhouettes of the neighborhood beyond. The sheet stays whole and continuous — never cut open.
+  (d) DETAIL/MACRO: Tight close-up of hands, brush, roller, or a freshly painted wall surface. No scaffolding or sheet needed in frame.
+NEVER show a worker in clear focus from outside while the sheet conveniently has a gap or opening at that spot.
+SETTING: Japanese residential neighborhood, apartment or house exterior with scaffolding, clear blue sky above (for option c, sky and surroundings are seen as soft shapes through the mesh).
+COMPOSITION: Wide-angle (24-35mm) for (a)(b), 35-50mm for (c), 85-100mm macro for (d). Eye-level or slightly elevated. Maximum 2 workers visible.`,
 
   "building-exterior": `VISUAL CATEGORY: Building Exterior / Architecture
 SUBJECT GUIDANCE: Show the building itself as the main subject — its walls, roof, facade, or architectural details. For deterioration topics, show close-up textures of walls, cracks, or weathering. For general topics, show a clean, well-maintained building exterior. Do NOT add people as the main subject.
@@ -460,59 +465,137 @@ COMPOSITION: Creative and varied — overhead, wide establishing, or tight symbo
 };
 
 // 足場・安全ルール（construction-site カテゴリのみ適用）
+// 3階層構造:
+//   Tier 1: 常時必須（シート連続性・フレーミング・足場種別）
+//   Tier 2: 写る場合のみ正確に / 写るとNGな要素（ネガティブ）
+//   Tier 3: シーンキーワード検出時のみ注入（getConstructionSafetyBlock）
 const CONSTRUCTION_SAFETY_RULES = `
 CONSTRUCTION & PAINTING SITE SAFETY RULES (Astec Safety & Compliance Guide):
 
-=== SCAFFOLDING (足場) ===
-1. TYPE: Use "kusabi (vike) scaffolding" — interlocking wedge-type scaffolding commonly used in Japanese residential renovation. For buildings wider than 1m work area, use "hon-ashiba" (double-row scaffolding) with two rows of vertical posts for maximum stability.
-2. COVERAGE: Scaffolding MUST fully enclose the entire building facade from ground level to at least 1 meter ABOVE the eaves/roofline. No partial scaffolding — every wall face being worked on must be fully covered.
-3. SAFETY FEATURES: Handrails at 85cm or higher on all working platforms, plus mid-rails. Toe boards at least 10cm high at the base of each platform. Diagonal cross-bracing between vertical posts.
-4. WORK PLATFORM: Clean and clear — no paint cans, tools, or materials left on the scaffolding floor.
+=== TIER 1 — ALWAYS ENFORCE ===
 
-=== SPLASH PREVENTION SHEETS (飛散防止シート) ===
-5. For ANY pressure washing or painting scene, the ENTIRE scaffolding must be wrapped in gray or white mesh splash-prevention sheets.
-6. Sheet requirements: All grommet ties securely fastened with NO gaps between sheets. Sheets extend from nearly ground level up to at least 1 meter above the eaves. No loose or flapping sections.
-7. For airless spray painting, use DOUBLE-LAYER sheets.
+[SHEET] The mesh splash-prevention sheet wraps the entire scaffolding facade CONTINUOUSLY from near ground to at least 1m above the eaves. NO gaps, openings, or cutouts anywhere — especially NOT behind a visible worker. EXCEPTION: For Japanese detached houses and apartment buildings, the area immediately around the MAIN ENTRANCE / front door is INTENTIONALLY LEFT OPEN (no sheet over the doorway and roughly 1m on each side) so residents and workers can pass through. The opening is only at the entrance — every other facade remains fully wrapped. Use double-layer mesh for airless spray scenes.
 
-=== HARNESS & FALL PROTECTION (フルハーネス型墜落制止用器具) ===
-8. Workers at ANY height on scaffolding MUST wear a full-body harness — NOT an old-style waist belt.
-9. Full-body harness anatomy (front view, top to bottom): shoulder straps running over both shoulders, a detachable connector strap joining the shoulder straps at upper chest, a chest strap/buckle across the mid-chest, a waist belt around the torso, and leg/thigh straps looping around each thigh with a pelvic belt connecting them at the lower back.
-10. Full-body harness anatomy (rear view): a single D-ring mounted at the center of the upper back between the shoulder blades. A lanyard connects from this D-ring, incorporating a shock absorber midway, and terminates in a carabiner hook that attaches to an anchor point on the scaffolding ABOVE the worker.
-11. All harness straps must appear taut and fitted — not loose or baggy. The lanyard must be visibly routed from the back D-ring upward to an overhead anchor.
+[FRAMING WHEN A WORKER IS VISIBLE] Pick ONE composition:
+  (A) Wide exterior — worker is a soft silhouette behind the intact mesh
+  (B) Interior view — camera inside the scaffolding; the mesh sheet becomes a translucent background wall (sheet stays whole)
+  (C) Detail/macro — hands, brush, roller, or wall surface only
+NEVER cut the sheet open to reveal a worker from outside.
 
-=== WORKER ATTIRE ===
-12. HELMET: SG-rated safety helmet with chin strap securely fastened.
-13. CLOTHING: Long-sleeved uniform, shirt tucked into pants, no accessories.
-14. FOOTWEAR: Safety shoes or tabi-style work shoes.
-15. GLOVES: Work gloves on both hands.
+[SCAFFOLDING TYPE] Kusabi (wedge-type) scaffolding for Japanese residential renovation. For work areas wider than 1m, prefer hon-ashiba (two-row vertical posts).
 
-=== GROUND SAFETY ===
-16. Entry prohibition signs or caution tape around the scaffolding perimeter.
+=== TIER 2 — NEGATIVE (NEVER show any of these) ===
 
-NEGATIVE PROMPT (NEVER generate these):
-- Scaffolding that covers only part of the building or stops below the roofline
-- Workers without full-body harness on scaffolding
-- Waist-only safety belts (outdated and prohibited)
-- Harness lanyards hanging loose or not connected overhead
-- Workers with bare arms, rolled-up sleeves, or short sleeves
-- Paint cans or tools scattered on scaffolding platforms
-- Pedestrians walking under scaffolding without barriers
+[ATTIRE]
+- Old-style waist belt or any belt that lacks shoulder/chest/leg straps (2019 regulation requires a full-body harness; if you cannot draw it confidently, frame chest-up so the harness is implied — but NEVER show a waist-only belt)
+- Rolled-up sleeves, short sleeves, or bare forearms
+- Untucked shirt or exposed midriff/lower back
+- Oversized/baggy uniform with loose hanging fabric
+- Low-rise sagging waistband (belt must sit at the natural waist)
+- Wristwatch, bracelet, necklace, ring, or any accessory on hands/wrists/neck
+- Helmet without a chin strap, cracked, dirty, or visibly aged helmet
+- Towel wrapped under the helmet
+- Sandals, slip-on shoes, or non-safety footwear
 
-ANTI-HALLUCINATION RULES:
-- If you cannot confidently depict safety details, zoom OUT to a wider shot.
-- A fully mesh-wrapped building from a distance is always better than an inaccurate close-up.
-- Show scaffolding as a UNIFORM GRID pattern — do not attempt individual pipe joints.
+[SCAFFOLDING & SITE]
+- Single-row scaffolding (一側足場) — use two-row hon-ashiba instead
+- Scaffold legs standing directly on bare soil or grass (must rest on baseplates)
+- Paint cans, buckets, or tools left on the work platform
+- Pedestrians walking under the scaffolding with no barrier
+- Scaffolding stopping below the roofline
+- ANY non-worker on the scaffolding — only painters/workers in proper safety gear may be on the platform. NEVER show homeowners, residents, clients (施主), family members, children, pets, or any civilian in everyday clothes standing or walking on the scaffolding.
+
+=== TIER 2 — POSITIVE (if visible, depict correctly; if uncertain, FRAME OUT rather than guess) ===
+
+[ATTIRE — when worker is shown]
+- White SG-rated safety helmet with chin strap fastened
+- Long-sleeved uniform reaching the wrists, shirt tucked in
+- Full-body harness: shoulder + chest + waist straps visible; lanyard from upper-back D-ring to an overhead anchor on the scaffolding
+- Work gloves on both hands
+- Safety shoes or tabi-style work shoes
+- Maximum 2 workers in frame
+
+[SCAFFOLDING — only if structural details fall within the framing]
+- Two-row vertical posts (hon-ashiba)
+- Wall ties: short horizontal bars connecting scaffold to building
+- Scaffold legs on flat wooden baseplates with jack screws
+- Continuous work platform; board gaps ≤3cm, platform width ≥40cm
+- Top rail ~85cm, mid-rail ~35–50cm
+- Toe board or mesh netting at platform edge to catch falling objects
+- Entry-prohibition sign at scaffold entrance (only if a doorway is in frame)
+
+=== ANTI-HALLUCINATION (extends global rules) ===
+- Show scaffolding as a UNIFORM GRID; do not attempt individual joint geometry.
 - Show splash-prevention sheets as a CONTINUOUS FLAT SURFACE.
-
-SIMPLIFICATION RULES:
-- Maximum 2 workers visible.
-- When in doubt, choose a fully mesh-wrapped building exterior over a complex worker scene.
+- If ground-level details (jacks, baseplates, wall ties) cannot be drawn confidently, frame to EXCLUDE them (above-ground, interior view, or detail/macro).
+- A fully mesh-wrapped building from a distance is always better than an inaccurate close-up.
 `;
+
+// シーンキーワード検出時に追加注入するアドオン（Tier 3）
+interface ConstructionSceneAddon {
+  name: string;
+  keywords: string[];
+  rules: string;
+}
+
+const CONSTRUCTION_SCENE_ADDONS: ConstructionSceneAddon[] = [
+  {
+    name: "roof",
+    keywords: ["屋根塗装", "屋根", "勾配", "瓦", "棟", "破風"],
+    rules: `
+[ROOF SCENE ADDON]
+- For roof slopes ≥4.5/10, a roof scaffold (屋根足場) is installed in addition to the perimeter scaffolding.
+- PREFERRED FRAMING: choose a WIDE / DISTANT shot of the roof and scaffolding rather than a worker close-up. Do NOT attempt to render exact handrail heights, mid-rail spacing, or harness/lanyard details — frame the scene so structural details are far enough to read as a clean grid pattern.
+- If a worker appears, they should be SMALL in the frame (distant figure), not a portrait subject.`,
+  },
+  {
+    name: "hot_weather",
+    keywords: ["夏", "熱中症", "猛暑", "炎天", "暑い"],
+    rules: `
+[HOT-WEATHER ADDON]
+- Workers wear ventilated fan-equipped jackets (空調服) with round fan units visible at the lower back.
+- A fan-equipped or vented safety helmet may be shown.
+- Bright clear sky and natural heat cues; the worker should NOT look distressed.`,
+  },
+  {
+    name: "power_line",
+    keywords: ["電線", "送配電", "高圧線", "電柱"],
+    rules: `
+[POWER-LINE ADDON]
+- Overhead power lines near the scaffolding are sleeved with YELLOW insulating protective covers (絶縁防護管).
+- Maintain a visible clearance between the scaffolding and the lines.`,
+  },
+  {
+    name: "strong_wind",
+    keywords: ["強風", "台風", "暴風", "嵐"],
+    rules: `
+[STRONG-WIND ADDON]
+- In wind ≥15m/s, splash-prevention sheets are partially removed or pulled to one side and tied tightly — NEVER depict full sheets flapping wildly in a storm.
+- No active painting work is shown during the storm itself.`,
+  },
+];
+
+/**
+ * H2・段落テキストからシーンキーワードを検出し、
+ * ベース安全ルール＋該当シーンアドオンを連結して返す。
+ */
+function getConstructionSafetyBlock(h2Text: string, paragraphText: string): string {
+  const combined = h2Text + " " + paragraphText;
+  let block = CONSTRUCTION_SAFETY_RULES;
+  for (const addon of CONSTRUCTION_SCENE_ADDONS) {
+    const matched = addon.keywords.some((kw) => combined.includes(kw));
+    if (matched) {
+      block += "\n" + addon.rules;
+      console.log(`🏗️ シーンアドオン適用: ${addon.name}`);
+    }
+  }
+  return block;
+}
 
 // カテゴリ別フォールバックプロンプト
 const CATEGORY_FALLBACKS: Record<VisualCategory, string> = {
   "construction-site":
-    "A bright, wide-angle photograph of a Japanese apartment building fully wrapped in gray mesh splash-prevention sheets on kusabi scaffolding under a clear blue sky, shot on Sony α7IV with 24mm f/2.8 lens, abundant natural daylight, clean composition showing the full building from ground to above roofline, no text or logos.",
+    "A bright photograph taken from INSIDE the scaffolding of a Japanese apartment exterior painting job — the building wall fills the foreground left, a single painter in blue uniform, white helmet, full-body harness, and gloves works mid-frame with a roller, and the gray mesh splash-prevention sheet forms the BACKGROUND as a translucent wall through which soft daylight and blurred neighborhood silhouettes can be seen. The sheet is continuous and unbroken. Shot on Sony α7IV with 35mm f/2 lens, abundant natural daylight filtering through the mesh, clean documentary composition, no text or logos.",
   "building-exterior":
     "A bright editorial photograph of a clean Japanese apartment building exterior under clear blue sky, shot on Canon EOS R5 with 35mm f/1.8 lens, warm natural daylight, slight perspective from the corner showing two facades, well-maintained walls and neat entrance, residential neighborhood setting, no text or logos.",
   "consultation":
@@ -544,8 +627,10 @@ export const generatePhotographyPrompt = async (
   const category = classifyVisualCategory(h2Text, paragraphText);
   const categoryGuide = CATEGORY_PROMPTS[category];
 
-  // Step 2: 足場ルールは construction-site のみ
-  const safetyRulesBlock = category === "construction-site" ? CONSTRUCTION_SAFETY_RULES : "";
+  // Step 2: 足場ルールは construction-site のみ（シーンキーワードに応じてアドオン追加）
+  const safetyRulesBlock = category === "construction-site"
+    ? getConstructionSafetyBlock(h2Text, paragraphText)
+    : "";
 
   return retryWithExponentialBackoff(async () => {
     const systemPrompt = `You are a professional commercial photographer specializing in Japanese corporate and editorial photography.
