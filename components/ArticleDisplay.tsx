@@ -104,44 +104,35 @@ ${article.plainText}`;
     // localStorageにデータを保存（AI Article Imager for WordPressが読み込み用）
     localStorage.setItem("articleDataForImageGen", JSON.stringify(articleData));
 
-    // iframe版で開く
-    if (onOpenImageAgent) {
-      console.log("🖼️ 画像生成エージェントをiframeで開きます...");
-      onOpenImageAgent({
-        title: articleData.title,
-        content: articleData.htmlContent,
-        keyword: articleData.keyword,
-        autoMode: false, // 手動なのでautoModeはfalse
-        metaDescription: articleData.metaDescription,
-        slug: articleData.slug,
-        isTestMode: false,
-      });
-      console.log("✅ iframe起動完了");
+    // 画像生成エージェントを別タブで開く（iframeモーダル表示は無効化済み）
+    const imageGenUrl =
+      import.meta.env.VITE_IMAGE_GEN_URL ||
+      "http://localhost:5181";
+    const imageGenOrigin = new URL(imageGenUrl).origin;
+
+    console.log(`🚀 AI Article Imager for WordPressを開きます: ${imageGenUrl}`);
+    const newWindow = window.open(imageGenUrl, "_blank");
+
+    if (newWindow) {
+      setTimeout(() => {
+        console.log(
+          "📮 AI Article Imager for WordPressにpostMessageでデータを送信中..."
+        );
+        newWindow.postMessage(
+          {
+            type: "ARTICLE_DATA",
+            data: articleData,
+          },
+          imageGenOrigin
+        );
+        console.log("✅ postMessage送信完了");
+      }, 3000);
     } else {
-      // フォールバック: 別タブで開く
-      const imageGenUrl =
-        import.meta.env.VITE_IMAGE_GEN_URL ||
-        "http://localhost:5181";
-      const imageGenOrigin = new URL(imageGenUrl).origin;
-
-      console.log(`🚀 AI Article Imager for WordPressを開きます: ${imageGenUrl}`);
-      const newWindow = window.open(imageGenUrl, "_blank");
-
-      if (newWindow) {
-        setTimeout(() => {
-          console.log(
-            "📮 AI Article Imager for WordPressにpostMessageでデータを送信中..."
-          );
-          newWindow.postMessage(
-            {
-              type: "ARTICLE_DATA",
-              data: articleData,
-            },
-            imageGenOrigin
-          );
-          console.log("✅ postMessage送信完了");
-        }, 3000);
-      }
+      alert(
+        "ポップアップがブロックされました。ブラウザの設定で " +
+          imageGenOrigin +
+          " のポップアップを許可してください。"
+      );
     }
   };
 
