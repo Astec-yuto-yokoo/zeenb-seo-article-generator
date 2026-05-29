@@ -1908,21 +1908,9 @@ const App: React.FC = () => {
           />
         )}
 
-        {/* 画像生成エージェントiframe */}
-        {imageAgentEmbedState && (
-          <ImageGeneratorIframe
-            embedState={imageAgentEmbedState}
-            iframeRef={imageAgentIframeRef}
-            onLoad={sendDataToImageAgentIframe}
-            onError={(error) => {
-              console.error("❌ 画像生成エージェントiframeエラー:", error);
-              // エラー時は別タブで開き直すことを提案
-            }}
-            onClose={closeImageAgentIframe}
-            onReopenInNewTab={reopenImageAgentInNewTab}
-            height="calc(100vh - 120px)"
-          />
-        )}
+        {/* 画像生成エージェントiframe（モーダル表示は無効化済み）
+            記事執筆後に出現するモーダルは不要との要望により非表示。
+            画像生成を利用する場合は別タブで http://localhost:5181 を開く。 */}
     </div>
   );
 };
