@@ -1845,6 +1845,12 @@ const App: React.FC = () => {
                 // ArticleWriterを閉じない
                 // setShowArticleWriter(false);
                 // setShowWriterDirectly(false);
+              } else if (!(isFullAutoMode && autoArticleWriter)) {
+                // 通常の手動執筆フローでは執筆完了後に自動でモーダルを閉じる
+                // （フル自動モード・テストモードは後続処理のため開いたまま）
+                console.log("✅ 執筆完了 → ArticleWriterモーダルを自動クローズ");
+                setShowArticleWriter(false);
+                setAutoArticleWriter(false);
               }
             }}
             onAutoRevisionStart={() => {
