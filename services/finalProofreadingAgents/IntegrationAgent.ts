@@ -250,8 +250,15 @@ export class IntegrationAgent extends BaseProofreadingAgent {
           // 法的コンプライアンス（7点）
           scores.legalCompliance = weight * 7;
           break;
+        case 'internal-library-factcheck':
+          // 社内ライブラリ照合（ファクトチェック系に最大5点ボーナス、後段でcap）
+          scores.factChecking += weight * 5;
+          break;
       }
     }
+
+    // factChecking は 45点 が上限（社内ライブラリ照合ボーナスを含めても超えない）
+    scores.factChecking = Math.min(scores.factChecking, 45);
 
     // 構成ルールは固定値（後で実装時に計算）
     scores.structureRules = 14.4; // 18点 × 0.8 = 暫定値

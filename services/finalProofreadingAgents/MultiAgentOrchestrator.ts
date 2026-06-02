@@ -9,6 +9,7 @@ import { TechnicalAgent } from "./TechnicalAgent";
 import { LegalAgent } from "./LegalAgent";
 import { SourceRequirementAgent } from "./SourceRequirementAgent";
 import { SourceEnhancementAgent } from "./SourceEnhancementAgent";
+import { InternalLibraryFactCheckAgent } from "./InternalLibraryFactCheckAgent";
 import { IntegrationAgent } from "./IntegrationAgent";
 import { MixtureOfAgentsVerifier } from "./MixtureOfAgentsVerifier";
 import type { CitationVerificationResult } from "./MixtureOfAgentsVerifier";
@@ -58,6 +59,7 @@ export class MultiAgentOrchestrator {
       new SourceRequirementAgent(),
       new SourceEnhancementAgent(),
       new CitationsAgent(),
+      new InternalLibraryFactCheckAgent(), // 社内ライブラリ照合（Dify Workflow）
     ];
 
     this.integrationAgent = new IntegrationAgent();
@@ -589,6 +591,19 @@ export class MultiAgentOrchestrator {
     });
     results.push(verifyResult);
 
+    // 4番目: 社内ライブラリ照合エージェント（Dify Workflow）
+    // phaseTwoAgents[3] が登録されていれば実行（存在しない構成でも壊さない）
+    const internalLibraryAgent = this.phaseTwoAgents[3];
+    if (internalLibraryAgent) {
+      console.log("📚 社内ライブラリと照合中...");
+      const internalLibraryResult = await this.executeWithTimeout(
+        internalLibraryAgent,
+        content,
+        context
+      );
+      results.push(internalLibraryResult);
+    }
+
     return results;
   }
 
@@ -768,6 +783,9 @@ export class MultiAgentOrchestrator {
       case "citations":
       case "company":
         return 600000;
+      case "internal-library-factcheck":
+        // 社内ライブラリ照合（Dify Workflow）。Dify側35〜75秒 + 余裕。
+        return 180000;
       default:
         return 900000;
     }
