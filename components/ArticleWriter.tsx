@@ -32,6 +32,7 @@ import ProofreadingReportComponent from "./ProofreadingReport";
 import LoadingSpinner from "./LoadingSpinner";
 import { slackNotifier } from "../services/slackNotificationService";
 import { extractCautionNotes } from "../utils/extractCautionNotes";
+import { numberArticleHeadings, buildOutlineLabels } from "../utils/headingNumberer";
 import { generateSlug } from "../services/slugGenerator";
 
 /**
@@ -90,6 +91,9 @@ function cleanupArticleContent(content: string): string {
 
   // WordPress ブロックエディタ互換のテーブルHTML整形
   cleaned = fixWordPressTableBlocks(cleaned);
+
+  // H2/H3 見出しに番号付与（H2: "1. ", H3: "1-1. "）— 冪等
+  cleaned = numberArticleHeadings(cleaned);
 
   // 変更内容をログ出力
   const asteriskCount = (content.match(/\*/g) || []).length;

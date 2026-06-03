@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { SeoOutlineV2, OutlineSectionV2 } from '../types';
 import { countCharacters } from '../utils/characterCounter';
+import { buildOutlineLabels } from '../utils/headingNumberer';
 import { reviseOutlineSection, reviseFullOutline } from '../services/outlineGeneratorV2';
 import type { ReferenceMaterial } from '../services/referenceMaterialService';
 import {
@@ -316,12 +317,13 @@ ${outline.competitorComparison.differentiators.map((diff, i) => `  ${i + 1}) ${d
       {/* 構成本体 */}
       <Card icon={<OutlineIcon className="w-6 h-6 text-blue-500" />} title="記事構成案">
         <div className="space-y-6">
-          {outline.outline.map((section, index) => (
+          {(() => {
+            const numberedLabels = buildOutlineLabels(outline.outline);
+            return outline.outline.map((section, index) => (
             <div key={index} className="border-l-4 border-blue-400 pl-4 space-y-3">
               <div>
                 <h4 className="font-bold text-lg text-gray-800">
-                  <span className="text-blue-600 mr-2">H2-{index + 1}:</span>
-                  {section.heading}
+                  {numberedLabels[index] ? numberedLabels[index].h2Label : section.heading}
                 </h4>
 
                 {/* 画像提案 */}
@@ -349,8 +351,11 @@ ${outline.competitorComparison.differentiators.map((diff, i) => `  ${i + 1}) ${d
                   {section.subheadings.map((sub, subIndex) => (
                     <li key={subIndex} className="space-y-1">
                       <div className="flex items-start gap-2">
-                        <span className="text-blue-600 font-semibold">H3-{subIndex + 1}:</span>
-                        <span className="text-gray-700">{sub.text}</span>
+                        <span className="text-gray-700">
+                          {numberedLabels[index] && numberedLabels[index].h3Labels[subIndex]
+                            ? numberedLabels[index].h3Labels[subIndex]
+                            : sub.text}
+                        </span>
                       </div>
                       {sub.writingNote && (
                         <div className="ml-8 p-2 bg-gray-50 rounded text-sm text-gray-500">
@@ -427,7 +432,8 @@ ${outline.competitorComparison.differentiators.map((diff, i) => `  ${i + 1}) ${d
                 </div>
               )}
             </div>
-          ))}
+          ));
+          })()}
         </div>
       </Card>
 
