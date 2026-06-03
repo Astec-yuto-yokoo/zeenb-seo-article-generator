@@ -13,6 +13,7 @@ import { getContextForKeywords, isSupabaseAvailable } from "./primaryDataService
 import type { ImageAsset } from "./boxImageService";
 import { buildImageContext } from "./contextBuilder";
 import { buildProductRecommendationText } from "./productRecommendationConfig";
+import { numberArticleHeadings } from "../utils/headingNumberer";
 // latestAIModelsは汎用化のため削除
 
 const API_KEY =
@@ -440,6 +441,11 @@ output_contract:
     完全なHTML形式で出力。以下の規則を厳守：
     【必須HTML形式】
     - 見出し: <h2>見出しテキスト</h2>、<h3>小見出し</h3>
+      ※見出しの文頭には必ず番号を振ること（自動的にポストプロセスでも正規化される）
+        - H2: <h2>1. 見出しテキスト</h2>、<h2>2. 見出しテキスト</h2> … と通し番号
+        - H3: <h3>1-1. 小見出し</h3>、<h3>1-2. 小見出し</h3> … 親H2番号-H3連番、H2ごとに連番リセット
+        - FAQ・まとめ・自社サービス訴求のH2にも例外なく番号を付ける
+        - 番号書式: 半角数字 + 半角ピリオド + 半角スペース。「1.見出し」（スペース無）や「①見出し」（丸数字）は禁止
     - 段落: <p>テキスト</p>
       重要：段落分けの指針
       * 1つの<p>タグは最大140字を厳守（140字を超える場合は必ず分割する）
@@ -1091,7 +1097,10 @@ ${
       // リード文の「」「」連続を改行処理
       const formattedText = formatLeadQuotes(text);
 
-      return formattedText;
+      // H2/H3 に番号付与（H2: "1. ", H3: "1-1. "）— 冪等
+      const numberedText = numberArticleHeadings(formattedText);
+
+      return numberedText;
     } catch (error) {
       clearInterval(progressInterval);
       throw error;

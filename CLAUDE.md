@@ -138,6 +138,17 @@ DIFY_FACTCHECK_ENDPOINT                # 任意。未設定時は https://api.di
 
 `VITE_` プレフィックスのある変数のみブラウザ側で参照可能。
 
+## 見出し番号付与ルール（絶対厳守）
+
+最終記事HTMLの全 `<h2>` / `<h3>` には、文頭に番号を必ず振る。
+
+- **H2**: `N. ` 通し番号（半角数字 + ピリオド + 半角スペース）— FAQ・まとめ・自社サービス訴求も含めて例外なし
+- **H3**: `N-M. ` 形式（親H2番号 - H3連番、H2ごとに連番リセット）
+- 番号付与は `utils/headingNumberer.ts` の `numberArticleHeadings()` が **冪等**に処理（既存番号は剥がして付け直す）
+- 呼び出し箇所: `writingAgentV3.ts` の出力直前 / `sectionBasedArticleWriter.ts` の結合直後 / `ArticleWriter.tsx` の `cleanupArticleContent()` / `articleRevisionService.ts` のH2修正後
+- **データ層（`OutlineSectionV2.heading` 等）には番号を入れない**。表示は `buildOutlineLabels()` で計算
+- 参考フォーマット: https://zeenb.astecpaints.jp/journal/color/painting-color-48427
+
 ## 構成 Ver.2 ルール（絶対厳守）
 
 - タイトル: **29〜35文字**（32文字前後が理想）、自社サービス名・【】記号を含めない

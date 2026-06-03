@@ -25,6 +25,7 @@ import {
   reviseSpecificIssue,
   reviseBatchIssues,
   reviseArticleH2Section,
+  reviseArticle,
 } from "../services/articleRevisionService";
 import { testArticle, testOutline } from "../testData/sampleArticle";
 import type { ProofreadingReport } from "../types/proofreading";
@@ -32,6 +33,7 @@ import ProofreadingReportComponent from "./ProofreadingReport";
 import LoadingSpinner from "./LoadingSpinner";
 import { slackNotifier } from "../services/slackNotificationService";
 import { extractCautionNotes } from "../utils/extractCautionNotes";
+import { numberArticleHeadings, buildOutlineLabels } from "../utils/headingNumberer";
 import { generateSlug } from "../services/slugGenerator";
 
 /**
@@ -90,6 +92,9 @@ function cleanupArticleContent(content: string): string {
 
   // WordPress ブロックエディタ互換のテーブルHTML整形
   cleaned = fixWordPressTableBlocks(cleaned);
+
+  // H2/H3 見出しに番号付与（H2: "1. ", H3: "1-1. "）— 冪等
+  cleaned = numberArticleHeadings(cleaned);
 
   // 変更内容をログ出力
   const asteriskCount = (content.match(/\*/g) || []).length;
@@ -201,6 +206,11 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
   const [h2RevisionError, setH2RevisionError] = useState<string | null>(null);
   const [showH2RevisionPanel, setShowH2RevisionPanel] = useState(false);
 
+  // 原稿全体へのAI修正指示（フローティングUI）
+  const [fullArticleRevisionPrompt, setFullArticleRevisionPrompt] = useState("");
+  const [isRevisingFullArticle, setIsRevisingFullArticle] = useState(false);
+  const [fullArticleRevisionError, setFullArticleRevisionError] = useState<string | null>(null);
+
   // editedContentからH2見出しを抽出するヘルパー
   const extractH2Headings = (html: string): string[] => {
     const headings: string[] = [];
@@ -254,6 +264,53 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
       setH2RevisionError(`「${h2Heading}」: ${msg}`);
     } finally {
       setH2Revising(null);
+    }
+  };
+
+  // 原稿全体へのAI修正ハンドラ
+  const handleReviseFullArticle = async () => {
+    const instruction = fullArticleRevisionPrompt.trim();
+    if (!instruction || !editedContent) return;
+
+    setIsRevisingFullArticle(true);
+    setFullArticleRevisionError(null);
+
+    try {
+      const result = await reviseArticle(editedContent, instruction);
+      if (!result.success || !result.revised) {
+        setFullArticleRevisionError(result.error || '記事修正に失敗しました');
+        return;
+      }
+
+      // クリーンアップ（番号付与・テーブル整形等を含む）
+      const cleaned = cleanupArticleContent(result.revised);
+      setEditedContent(cleaned);
+
+      if (article) {
+        const updatedArticle = {
+          ...article,
+          htmlContent: cleaned,
+          plainText: cleaned.replace(/<[^>]*>/g, ''),
+        };
+        setArticle(updatedArticle);
+        if (onArticleGenerated) {
+          onArticleGenerated(updatedArticle);
+        }
+      }
+
+      setFullArticleRevisionPrompt('');
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '記事修正に失敗しました';
+      setFullArticleRevisionError(msg);
+    } finally {
+      setIsRevisingFullArticle(false);
+    }
+  };
+
+  const handleFullArticleRevisionKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      handleReviseFullArticle();
     }
   };
 
@@ -2498,7 +2555,7 @@ ${
           ) : article ? (
             <>
               {/* メインコンテンツ */}
-              <div className="flex-1 overflow-auto p-6">
+              <div className="flex-1 overflow-auto p-6 pb-32">
                 {viewMode === "preview" ? (
                   // プレビューモード
                   <div className="bg-white rounded-lg p-8 text-gray-900">
@@ -2982,6 +3039,43 @@ ${
             report={proofreadingReport}
             onClose={() => setShowProofreadingReport(false)}
           />
+        )}
+
+        {/* フローティング：原稿全体へのAI修正指示 */}
+        {article && editedContent && (
+          <div className="fixed bottom-0 left-0 right-0 z-[55] bg-white/95 backdrop-blur-sm border-t border-gray-300 shadow-[0_-4px_12px_rgba(0,0,0,0.1)] px-4 py-3">
+            <div className="max-w-4xl mx-auto">
+              {fullArticleRevisionError && (
+                <p className="text-sm text-red-500 mb-2">{fullArticleRevisionError}</p>
+              )}
+              <div className="flex gap-3 items-end">
+                <textarea
+                  value={fullArticleRevisionPrompt}
+                  onChange={(e) => setFullArticleRevisionPrompt(e.target.value)}
+                  onKeyDown={handleFullArticleRevisionKeyDown}
+                  placeholder="原稿全体への修正指示を入力（例：もっと初心者向けに言い換えて、事例を追加して）… Ctrl+Enterで送信"
+                  className="flex-1 px-4 py-2.5 text-sm border border-gray-300 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                  rows={2}
+                  disabled={isRevisingFullArticle}
+                />
+                <button
+                  onClick={handleReviseFullArticle}
+                  disabled={isRevisingFullArticle || !fullArticleRevisionPrompt.trim()}
+                  className="px-6 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-indigo-500 to-blue-500 rounded-xl hover:from-indigo-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap shadow-sm"
+                >
+                  {isRevisingFullArticle ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      修正中...
+                    </span>
+                  ) : '原稿を修正'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

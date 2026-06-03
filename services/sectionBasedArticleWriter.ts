@@ -7,6 +7,7 @@ import type { WritingRegulation } from './articleWriterService';
 import { proofreadArticle, autoFixArticle, autoFixArticleBySection } from './proofreadingAgent';
 import { checkFactsForSection, type FactInfo } from './factCheckService';
 import { getCompanyInfo, generateCompanyContext } from './companyService';
+import { numberArticleHeadings } from '../utils/headingNumberer';
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY;
 if (!apiKey) {
@@ -668,6 +669,9 @@ export async function generateArticleBySection(
     ...sectionResults.map(r => r.html),
     conclusion
   ].join('\n\n');
+
+  // H2/H3 に番号付与（H2: "1. ", H3: "1-1. "）— 冪等
+  htmlContent = numberArticleHeadings(htmlContent);
   
   // 5. タイトルとメタディスクリプションを生成
   const title = `【2025年最新】${keyword}完全ガイド｜${allSections[0].heading}から${allSections[allSections.length - 1].heading}まで徹底解説`;

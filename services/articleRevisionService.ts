@@ -7,6 +7,7 @@ import {
 } from "./finalProofreadingAgents/utils/articleParser";
 import { slackNotifier } from "./slackNotificationService";
 import { curriculumDataService } from "./curriculumDataService";
+import { numberArticleHeadings } from "../utils/headingNumberer";
 // latestAIModelsは汎用化のため削除
 
 // Gemini APIクライアントの初期化
@@ -1665,6 +1666,11 @@ export async function reviseArticleH2Section(
     matches.push({ index: match.index, text: match[0] });
   }
 
+  // H2照合用に番号プレフィックスを剥がす関数（番号付与の前後どちらでも一致するように）
+  const stripHeadingNumber = (s: string): string =>
+    s.replace(/^[0-9０-９]+(?:[-－][0-9０-９]+)?[\.．]\s*/, '').trim();
+  const targetHeadingNormalized = stripHeadingNumber(h2Heading);
+
   // 対象H2の位置を特定
   let targetStart = -1;
   let targetEnd = -1;
@@ -1676,7 +1682,7 @@ export async function reviseArticleH2Section(
     const headingTextMatch = sectionHtml.match(/<h2[^>]*>([\s\S]*?)<\/h2>/i);
     if (headingTextMatch) {
       const extractedText = headingTextMatch[1].replace(/<[^>]*>/g, '').trim();
-      if (extractedText === h2Heading.trim()) {
+      if (stripHeadingNumber(extractedText) === targetHeadingNormalized) {
         targetStart = sectionStart;
         targetEnd = sectionEnd;
         break;
@@ -1741,8 +1747,10 @@ ${userPrompt}
       .replace(/<b>/gi, "<strong>")
       .replace(/<\/b>/gi, "</strong>");
 
-    // セクションを結合して返す
-    const revisedFull = beforeSection + revisedSection + afterSection;
+    // セクションを結合して全体に番号を振り直す（H2追加・削除に対応）
+    const revisedFull = numberArticleHeadings(
+      beforeSection + revisedSection + afterSection
+    );
     console.log(`✅ 記事H2セクション修正完了: 「${h2Heading}」`);
     return revisedFull;
   } catch (error) {
