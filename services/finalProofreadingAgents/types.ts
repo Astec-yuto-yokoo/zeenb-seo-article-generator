@@ -44,6 +44,7 @@ export type AgentType =
   | 'citation-verification' // 出典正確性検証（MoA）
   | 'technical'          // 技術仕様確認
   | 'legal'              // 法令・規制チェック
+  | 'internal-library-factcheck' // 社内ライブラリ照合（Dify Workflow）
   | 'integration';       // 最終統合
 
 export type IssueType = 

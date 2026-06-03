@@ -1075,6 +1075,10 @@ app.delete("/api/reference-materials/:id", handleDelete);
 const { getBoxImages } = require("./api/box-images.js");
 app.get("/api/box-images", getBoxImages);
 
+// 社内ライブラリ・ファクトチェッカー（Dify Workflow API プロキシ）
+const { runInternalFactCheck } = require("./api/internal-fact-check.js");
+app.post("/api/internal-fact-check", runInternalFactCheck);
+
 // Slack通知プロキシエンドポイント（CORSを回避）
 app.post("/api/slack-notify", async (req, res) => {
   const { message } = req.body;

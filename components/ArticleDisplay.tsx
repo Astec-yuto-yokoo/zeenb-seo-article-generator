@@ -2,6 +2,8 @@ import React, { useState, useMemo } from "react";
 import type { SeoOutline } from "../types";
 import { generateFaqSchemaFromArticle } from "../utils/faqSchemaGenerator";
 import { generateSlug } from "../services/slugGenerator";
+import { MultiAgentOrchestrator } from "../services/finalProofreadingAgents/MultiAgentOrchestrator";
+import type { IntegrationResult } from "../services/finalProofreadingAgents/types";
 
 interface ArticleDisplayProps {
   article: {
@@ -30,6 +32,52 @@ const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
 }) => {
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview");
   const [copyButtonText, setCopyButtonText] = useState("HTMLコピー");
+
+  // 最終校閲（マルチエージェント）
+  const [isFinalProofreading, setIsFinalProofreading] = useState(false);
+  const [proofStatus, setProofStatus] = useState<string>("");
+  const [proofResult, setProofResult] = useState<IntegrationResult | null>(null);
+  const [showProofResult, setShowProofResult] = useState<boolean>(false);
+
+  const handleFinalProofread = async () => {
+    if (isFinalProofreading) return;
+
+    console.log("🔘 [FAB] 最終校閲ボタンがクリックされました");
+    setIsFinalProofreading(true);
+    setProofStatus("校閲を開始...");
+    setProofResult(null);
+    setShowProofResult(false);
+
+    try {
+      const orchestrator = new MultiAgentOrchestrator({
+        enableLegalCheck: true,
+        parallel: true,
+        timeout: 180000,
+        enableMoA: false,
+        enableSelfEvaluation: false,
+        onProgress: function (message: string, progress: number) {
+          setProofStatus(message + " (" + progress + "%)");
+        },
+      });
+
+      const result = await orchestrator.execute(article.htmlContent);
+      setProofResult(result);
+      setShowProofResult(true);
+      console.log("✅ [FAB] マルチエージェント実行完了:", {
+        overallScore: result.overallScore,
+        passed: result.passed,
+        criticalIssues: result.criticalIssues.length,
+        majorIssues: result.majorIssues.length,
+      });
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error("❌ [FAB] 最終校閲エラー:", error);
+      alert("最終校閲でエラーが発生しました：\n" + errMsg);
+    } finally {
+      setIsFinalProofreading(false);
+      setProofStatus("");
+    }
+  };
 
   // FAQPage JSON-LD を生成
   var faqJsonLd = useMemo(function () {
@@ -211,15 +259,6 @@ ${article.plainText}`;
 
         {/* アクションボタン */}
         <div className="flex gap-2 justify-end flex-wrap">
-          {onEditClick && (
-            <button
-              onClick={onEditClick}
-              className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors flex items-center gap-2"
-              title="記事編集モーダルを開く"
-            >
-              編集を再開
-            </button>
-          )}
           <button
             onClick={handleCopyHtml}
             className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors border border-gray-200"
@@ -307,6 +346,274 @@ ${article.plainText}`;
         </div>
       )}
 
+      {/* 最終校閲 結果パネル */}
+      {showProofResult && proofResult && (
+        <div
+          className={
+            "p-5 rounded-xl border-l-4 shadow-sm space-y-4 " +
+            (proofResult.passed
+              ? "bg-green-50 border-green-500"
+              : "bg-amber-50 border-amber-500")
+          }
+        >
+          {/* ヘッダー */}
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-3">
+              <span>🤖 最終校閲結果</span>
+              <span
+                className={
+                  "px-3 py-1 rounded-full text-sm " +
+                  (proofResult.passed
+                    ? "bg-green-100 text-green-800"
+                    : "bg-amber-100 text-amber-800")
+                }
+              >
+                {proofResult.overallScore}/100点
+                {proofResult.passed ? " ✅ 合格" : " ⚠ 要修正"}
+              </span>
+            </h3>
+            <button
+              onClick={function () {
+                setShowProofResult(false);
+              }}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* スコア内訳 */}
+          {proofResult.regulationScore && (
+            <div>
+              <h4 className="text-sm font-bold text-gray-700 mb-2">
+                スコア内訳
+              </h4>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                <div className="bg-white rounded p-2 border">
+                  <div className="text-gray-500">ファクトチェック</div>
+                  <div className="font-bold text-gray-800">
+                    {Math.round(proofResult.regulationScore.factChecking)} / 45
+                  </div>
+                </div>
+                <div className="bg-white rounded p-2 border">
+                  <div className="text-gray-500">信頼性・引用</div>
+                  <div className="font-bold text-gray-800">
+                    {Math.round(proofResult.regulationScore.reliability)} / 25
+                  </div>
+                </div>
+                <div className="bg-white rounded p-2 border">
+                  <div className="text-gray-500">構成ルール</div>
+                  <div className="font-bold text-gray-800">
+                    {Math.round(proofResult.regulationScore.structureRules)} /
+                    18
+                  </div>
+                </div>
+                <div className="bg-white rounded p-2 border">
+                  <div className="text-gray-500">法令準拠</div>
+                  <div className="font-bold text-gray-800">
+                    {Math.round(proofResult.regulationScore.legalCompliance)} /
+                    7
+                  </div>
+                </div>
+                <div className="bg-white rounded p-2 border">
+                  <div className="text-gray-500">総合品質</div>
+                  <div className="font-bold text-gray-800">
+                    {Math.round(proofResult.regulationScore.overallQuality)} / 5
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 指摘事項サマリー */}
+          <div>
+            <h4 className="text-sm font-bold text-gray-700 mb-2">指摘事項</h4>
+            <div className="grid grid-cols-3 gap-2 mb-2 text-sm">
+              <div className="bg-white rounded p-2 border">
+                <span className="text-red-600 font-semibold">重大:</span>{" "}
+                {proofResult.criticalIssues.length}件
+              </div>
+              <div className="bg-white rounded p-2 border">
+                <span className="text-amber-600 font-semibold">重要:</span>{" "}
+                {proofResult.majorIssues.length}件
+              </div>
+              <div className="bg-white rounded p-2 border">
+                <span className="text-gray-600 font-semibold">軽微:</span>{" "}
+                {proofResult.minorIssues.length}件
+              </div>
+            </div>
+
+            {proofResult.criticalIssues.length +
+              proofResult.majorIssues.length +
+              proofResult.minorIssues.length ===
+            0 ? (
+              <div className="text-sm text-green-700 bg-white p-3 rounded border border-green-200">
+                ✅ 指摘事項は検出されませんでした。
+              </div>
+            ) : (
+              <details className="text-sm" open>
+                <summary className="cursor-pointer text-blue-700 hover:underline font-semibold">
+                  指摘の詳細を表示
+                </summary>
+                <ul className="mt-2 space-y-2">
+                  {[
+                    ...proofResult.criticalIssues,
+                    ...proofResult.majorIssues,
+                    ...proofResult.minorIssues,
+                  ]
+                    .slice(0, 30)
+                    .map(function (issue, idx) {
+                      var severityLabel =
+                        issue.severity === "critical"
+                          ? "重大"
+                          : issue.severity === "major"
+                          ? "重要"
+                          : issue.severity === "minor"
+                          ? "軽微"
+                          : "情報";
+                      var typeLabel =
+                        issue.type === "factual-error"
+                          ? "事実誤認"
+                          : issue.type === "outdated-info"
+                          ? "古い情報"
+                          : issue.type === "inconsistency"
+                          ? "不整合"
+                          : issue.type === "missing-source"
+                          ? "出典不明"
+                          : issue.type === "legal-risk"
+                          ? "法的リスク"
+                          : issue.type === "brand-error"
+                          ? "ブランド表記誤り"
+                          : issue.type === "technical-error"
+                          ? "技術的誤り"
+                          : issue.type === "style-issue"
+                          ? "表現スタイル"
+                          : issue.type;
+                      var severityColor =
+                        issue.severity === "critical"
+                          ? "bg-red-100 text-red-800"
+                          : issue.severity === "major"
+                          ? "bg-amber-100 text-amber-800"
+                          : "bg-gray-100 text-gray-700";
+                      return (
+                        <li
+                          key={idx}
+                          className="bg-white p-3 rounded border border-gray-200"
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <span
+                              className={
+                                "text-xs font-bold px-2 py-0.5 rounded " +
+                                severityColor
+                              }
+                            >
+                              {severityLabel}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {typeLabel}
+                            </span>
+                            <span className="text-xs text-gray-400">
+                              {issue.location}
+                            </span>
+                          </div>
+                          <div className="text-gray-800 mb-1">
+                            {issue.description}
+                          </div>
+                          {issue.original && (
+                            <div className="text-xs bg-red-50 border-l-2 border-red-300 px-2 py-1 my-1">
+                              <span className="font-semibold text-red-700">
+                                該当箇所:
+                              </span>{" "}
+                              <span className="text-gray-700">
+                                {issue.original}
+                              </span>
+                            </div>
+                          )}
+                          {issue.suggestion && (
+                            <div className="text-xs bg-blue-50 border-l-2 border-blue-300 px-2 py-1 my-1">
+                              <span className="font-semibold text-blue-700">
+                                改善案:
+                              </span>{" "}
+                              <span className="text-gray-700">
+                                {issue.suggestion}
+                              </span>
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                </ul>
+              </details>
+            )}
+          </div>
+
+          {/* 改善提案 */}
+          {proofResult.suggestions && proofResult.suggestions.length > 0 && (
+            <div>
+              <h4 className="text-sm font-bold text-gray-700 mb-2">
+                改善提案（{proofResult.suggestions.length}件）
+              </h4>
+              <details className="text-sm" open>
+                <summary className="cursor-pointer text-blue-700 hover:underline font-semibold">
+                  提案を表示
+                </summary>
+                <ul className="mt-2 space-y-2">
+                  {proofResult.suggestions
+                    .slice(0, 15)
+                    .map(function (s, idx) {
+                      var priorityLabel =
+                        s.priority === "high"
+                          ? "優先度・高"
+                          : s.priority === "medium"
+                          ? "優先度・中"
+                          : "優先度・低";
+                      var priorityColor =
+                        s.priority === "high"
+                          ? "bg-red-100 text-red-800"
+                          : s.priority === "medium"
+                          ? "bg-amber-100 text-amber-800"
+                          : "bg-gray-100 text-gray-700";
+                      return (
+                        <li
+                          key={idx}
+                          className="bg-white p-3 rounded border border-gray-200"
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <span
+                              className={
+                                "text-xs font-bold px-2 py-0.5 rounded " +
+                                priorityColor
+                              }
+                            >
+                              {priorityLabel}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {s.type}
+                            </span>
+                          </div>
+                          <div className="text-gray-800 mb-1">
+                            {s.description}
+                          </div>
+                          {s.implementation && (
+                            <div className="text-xs bg-blue-50 border-l-2 border-blue-300 px-2 py-1 my-1">
+                              <span className="font-semibold text-blue-700">
+                                実装方法:
+                              </span>{" "}
+                              <span className="text-gray-700">
+                                {s.implementation}
+                              </span>
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                </ul>
+              </details>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* コンテンツエリア */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         {viewMode === "preview" ? (
@@ -339,6 +646,43 @@ ${article.plainText}`;
           </div>
         )}
       </div>
+
+      {/* 最終校閲 FAB（画面右下に追従型・丸ボタン） */}
+      <button
+        type="button"
+        onClick={handleFinalProofread}
+        disabled={isFinalProofreading}
+        className={
+          "fixed bottom-8 right-8 z-50 w-32 h-32 rounded-full text-white shadow-2xl flex flex-col items-center justify-center transition-all hover:scale-110 disabled:cursor-not-allowed border-4 border-white " +
+          (isFinalProofreading
+            ? "bg-gradient-to-br from-gray-400 to-gray-500 opacity-90"
+            : "bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700")
+        }
+        title="最終校閲 Ver.2.0（マルチエージェント校閲）"
+      >
+        {isFinalProofreading ? (
+          <>
+            <span className="text-3xl animate-pulse">🤖</span>
+            <span className="text-sm font-bold mt-1">校閲中</span>
+          </>
+        ) : (
+          <>
+            <span className="text-3xl">🤖</span>
+            <span className="text-sm font-bold leading-tight mt-1 text-center">
+              最終校閲
+              <br />
+              Ver.2.0
+            </span>
+          </>
+        )}
+      </button>
+
+      {/* 校閲中のステータスバブル */}
+      {isFinalProofreading && proofStatus && (
+        <div className="fixed bottom-32 right-8 z-40 bg-gray-900 text-white text-xs px-3 py-2 rounded-lg shadow-lg max-w-[280px]">
+          {proofStatus}
+        </div>
+      )}
     </div>
   );
 };
