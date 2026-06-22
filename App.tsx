@@ -1750,6 +1750,7 @@ const App: React.FC = () => {
                   }
                 }}
                 onOpenImageAgent={openImageAgentInIframe}
+                onArticleUpdate={setGeneratedArticle}
               />
             )}
 

@@ -4,6 +4,8 @@ import { generateFaqSchemaFromArticle } from "../utils/faqSchemaGenerator";
 import { generateSlug } from "../services/slugGenerator";
 import { MultiAgentOrchestrator } from "../services/finalProofreadingAgents/MultiAgentOrchestrator";
 import type { IntegrationResult } from "../services/finalProofreadingAgents/types";
+import { reviseArticleWhole } from "../services/articleRevisionService";
+import { fixWordPressListBlocks, fixWordPressTableBlocks } from "../services/writingAgentV3";
 
 interface ArticleDisplayProps {
   article: {
@@ -21,6 +23,12 @@ interface ArticleDisplayProps {
     keyword: string;
     autoMode?: boolean;
   }) => void;
+  onArticleUpdate?: (article: {
+    title: string;
+    metaDescription: string;
+    htmlContent: string;
+    plainText: string;
+  }) => void;
 }
 
 const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
@@ -29,6 +37,7 @@ const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
   outline,
   onEditClick,
   onOpenImageAgent,
+  onArticleUpdate,
 }) => {
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview");
   const [copyButtonText, setCopyButtonText] = useState("HTMLコピー");
@@ -38,6 +47,41 @@ const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
   const [proofStatus, setProofStatus] = useState<string>("");
   const [proofResult, setProofResult] = useState<IntegrationResult | null>(null);
   const [showProofResult, setShowProofResult] = useState<boolean>(false);
+
+  // 記事全体修正用state
+  const [wholeRevisionPrompt, setWholeRevisionPrompt] = useState<string>("");
+  const [isWholeRevising, setIsWholeRevising] = useState(false);
+  const [wholeRevisionError, setWholeRevisionError] = useState<string | null>(null);
+  const [showWholeRevisionPanel, setShowWholeRevisionPanel] = useState(false);
+
+  const handleReviseWhole = async () => {
+    const prompt = wholeRevisionPrompt;
+    if (!prompt || !prompt.trim()) return;
+
+    setIsWholeRevising(true);
+    setWholeRevisionError(null);
+
+    try {
+      const revisedHtml = await reviseArticleWhole(article.htmlContent, prompt.trim(), keyword);
+      let cleaned = fixWordPressListBlocks(revisedHtml);
+      cleaned = fixWordPressTableBlocks(cleaned);
+
+      const updated = {
+        ...article,
+        htmlContent: cleaned,
+        plainText: cleaned.replace(/<[^>]*>/g, ''),
+      };
+      if (onArticleUpdate) {
+        onArticleUpdate(updated);
+      }
+      setWholeRevisionPrompt("");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '修正に失敗しました';
+      setWholeRevisionError(msg);
+    } finally {
+      setIsWholeRevising(false);
+    }
+  };
 
   const handleFinalProofread = async () => {
     if (isFinalProofreading) return;
@@ -636,6 +680,50 @@ ${article.plainText}`;
                 prose-ul:my-4 prose-li:my-1"
               dangerouslySetInnerHTML={{ __html: article.htmlContent }}
             />
+
+            {/* 記事全体修正パネル */}
+            <div className="mt-6 border-t border-gray-200 pt-4">
+              <button
+                onClick={() => setShowWholeRevisionPanel(!showWholeRevisionPanel)}
+                className="w-full px-4 py-3 flex items-center justify-between text-left bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
+              >
+                <span className="text-sm font-semibold text-indigo-800">
+                  記事全体を修正（自然言語で指示）
+                </span>
+                <span className="text-indigo-400 text-xs">
+                  {showWholeRevisionPanel ? '▲ 閉じる' : '▼ 開く'}
+                </span>
+              </button>
+              {showWholeRevisionPanel && (
+                <div className="mt-3 space-y-3">
+                  {wholeRevisionError && (
+                    <p className="text-sm text-red-500 bg-red-50 p-2 rounded">{wholeRevisionError}</p>
+                  )}
+                  <div className="bg-indigo-50/50 p-3 rounded-lg border border-indigo-200">
+                    <p className="text-xs text-gray-600 mb-2">
+                      例: 「全体的にもう少しやわらかい口調にして」「専門用語が出てきたら必ず注釈を入れて」「読者の不安に寄り添うトーンに統一して」
+                    </p>
+                    <div className="flex gap-2">
+                      <textarea
+                        value={wholeRevisionPrompt}
+                        onChange={(e) => setWholeRevisionPrompt(e.target.value)}
+                        placeholder="記事全体への修正指示を入力..."
+                        className="flex-1 px-3 py-2 text-sm border border-indigo-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                        rows={3}
+                        disabled={isWholeRevising}
+                      />
+                      <button
+                        onClick={handleReviseWhole}
+                        disabled={isWholeRevising || !wholeRevisionPrompt.trim()}
+                        className="self-end px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                      >
+                        {isWholeRevising ? '修正中...' : 'AI全体修正'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           // コードモード

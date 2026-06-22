@@ -1358,6 +1358,77 @@ function formatHtmlQuotes(text: string): string {
 }
 
 /**
+ * WordPress Gutenberg リストブロック変換
+ * 素の <ul>/<ol> を <!-- wp:list --> + wp-block-list クラスに変換
+ */
+export function fixWordPressListBlocks(text: string): string {
+  let fixed = text;
+
+  // 1. 既存の wp:list / wp:list-item コメントをすべて除去（クリーンな状態から再構築）
+  fixed = fixed.replace(/<!--\s*wp:list-item\s*-->/gi, '');
+  fixed = fixed.replace(/<!--\s*\/wp:list-item\s*-->/gi, '');
+  fixed = fixed.replace(/<!--\s*wp:list(?:\s[^>]*)?\s*-->/gi, '');
+  fixed = fixed.replace(/<!--\s*\/wp:list\s*-->/gi, '');
+
+  // 2. <ul>/<ol> の class 属性を一旦除去（後で再付与）
+  fixed = fixed.replace(/<ul\s+class="[^"]*">/gi, '<ul>');
+  fixed = fixed.replace(/<ol\s+class="[^"]*">/gi, '<ol>');
+
+  // 3. <ul><ul> / <ol><ol> の二重ネストを除去
+  fixed = fixed.replace(/<ul>\s*<ul>/gi, '<ul>');
+  fixed = fixed.replace(/<\/ul>\s*<\/ul>/gi, '</ul>');
+  fixed = fixed.replace(/<ol>\s*<ol>/gi, '<ol>');
+  fixed = fixed.replace(/<\/ol>\s*<\/ol>/gi, '</ol>');
+
+  // 4. 連続する単一項目リストを統合
+  //    </ul> + (</p><p> や <p></p> や空白) + <ul> → 除去して統合
+  let prevFixed = '';
+  while (prevFixed !== fixed) {
+    prevFixed = fixed;
+    fixed = fixed.replace(
+      /<\/ul>\s*(?:<\/?p>|\s)*\s*<ul>/gi,
+      ''
+    );
+    fixed = fixed.replace(
+      /<\/ol>\s*(?:<\/?p>|\s)*\s*<ol>/gi,
+      ''
+    );
+  }
+
+  // 5. すべての <ul>/<ol> ブロックを WordPress 6.x 互換フォーマットに変換
+  fixed = fixed.replace(
+    /<(ul|ol)>([\s\S]*?)<\/\1>/gi,
+    (match, tagName, content) => {
+      const isOrdered = tagName.toLowerCase() === 'ol';
+      const listTag = isOrdered ? 'ol' : 'ul';
+      const wpListAttr = isOrdered ? ' {"ordered":true}' : '';
+
+      // <li>...</li> を個別に抽出（中間のゴミタグも無視）
+      const liItems: string[] = [];
+      const liRegex = /<li>([\s\S]*?)<\/li>/gi;
+      let liMatch;
+      while ((liMatch = liRegex.exec(content)) !== null) {
+        const itemContent = liMatch[1].replace(/\n/g, '').trim();
+        if (itemContent) {
+          liItems.push(itemContent);
+        }
+      }
+
+      if (liItems.length === 0) return match;
+
+      // WordPress 6.x 互換フォーマットで再構築
+      const formattedItems = liItems.map(item =>
+        '<!-- wp:list-item -->\n<li>' + item + '</li>\n<!-- /wp:list-item -->'
+      ).join('\n\n');
+
+      return '<!-- wp:list' + wpListAttr + ' -->\n<' + listTag + ' class="wp-block-list">' + formattedItems + '</' + listTag + '>\n<!-- /wp:list -->';
+    }
+  );
+
+  return fixed;
+}
+
+/**
  * WordPress Gutenberg テーブルブロック変換
  * 素の <table> を <!-- wp:table --> + <figure class="wp-block-table"> で包む
  */
