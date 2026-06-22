@@ -25,6 +25,7 @@ export interface Issue {
   original: string;
   suggestion?: string;
   confidence: number;
+  agentName?: string;   // どのエージェントの指摘か（UIフィルタ用。付与は任意）
 }
 
 export interface Suggestion {

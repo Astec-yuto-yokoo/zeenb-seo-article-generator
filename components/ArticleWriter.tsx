@@ -199,6 +199,8 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
   const [useMultiAgent, setUseMultiAgent] = useState(true); // マルチエージェントモードのトグル（デフォルトON）
   const [multiAgentResult, setMultiAgentResult] =
     useState<IntegrationResult | null>(null);
+  // 社内ライブラリ照合の指摘だけに絞り込むフィルタ
+  const [showLibOnlyPanel, setShowLibOnlyPanel] = useState(false);
 
   // H2ブロック単位修正用state
   const [h2RevisionPrompts, setH2RevisionPrompts] = useState<Record<string, string>>({});
@@ -2812,6 +2814,14 @@ ${
                       ...multiAgentResult.majorIssues,
                       ...multiAgentResult.minorIssues,
                     ];
+                    const isInternalLib = (i: { agentName?: string }) =>
+                      !!i &&
+                      typeof i.agentName === "string" &&
+                      i.agentName.indexOf("社内ライブラリ") !== -1;
+                    const internalLibCount = allIssues.filter(isInternalLib).length;
+                    const displayedIssues = showLibOnlyPanel
+                      ? allIssues.filter(isInternalLib)
+                      : allIssues;
                     const SEV: Record<
                       string,
                       { icon: string; label: string; box: string; text: string; btn: string }
@@ -2832,7 +2842,7 @@ ${
                       <div className="mb-4">
                         <div className="flex justify-between items-center mb-2">
                           <h4 className="text-sm font-semibold text-gray-700">
-                            検出された問題（{allIssues.length}件）
+                            検出された問題（{displayedIssues.length}件）
                           </h4>
                           <div className="flex gap-1">
                             {multiAgentResult.criticalIssues.length > 0 && (
@@ -2857,8 +2867,21 @@ ${
                             )}
                           </div>
                         </div>
+                        <label className="flex items-center gap-1 text-xs text-gray-600 mb-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={showLibOnlyPanel}
+                            onChange={(e) => setShowLibOnlyPanel(e.target.checked)}
+                          />
+                          社内ライブラリ照合のみ（{internalLibCount}件）
+                        </label>
+                        {showLibOnlyPanel && displayedIssues.length === 0 && (
+                          <div className="p-2 text-xs text-gray-500 bg-white border border-gray-200 rounded">
+                            社内ライブラリ照合の指摘はありません。
+                          </div>
+                        )}
                         <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-                          {allIssues.map((issue, idx) => {
+                          {displayedIssues.map((issue, idx) => {
                             const sev = SEV[issue.severity] || SEV.minor;
                             const issueId = `${issue.agentName}-${issue.description}`;
                             const isRevised = revisedIssues.has(issueId);

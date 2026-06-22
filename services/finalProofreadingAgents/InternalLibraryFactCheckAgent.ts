@@ -202,6 +202,7 @@ export class InternalLibraryFactCheckAgent extends BaseProofreadingAgent {
         description: detail,
         original: "",
         confidence: 85,
+        agentName: this.name,
       });
     });
 
@@ -220,6 +221,7 @@ export class InternalLibraryFactCheckAgent extends BaseProofreadingAgent {
           "（ナレッジベースに該当が無く確認できず／減点対象外）",
         original: "",
         confidence: 50,
+        agentName: this.name,
       });
     });
 

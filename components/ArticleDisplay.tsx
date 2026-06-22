@@ -47,6 +47,25 @@ const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
   const [proofStatus, setProofStatus] = useState<string>("");
   const [proofResult, setProofResult] = useState<IntegrationResult | null>(null);
   const [showProofResult, setShowProofResult] = useState<boolean>(false);
+  // 社内ライブラリ照合の指摘だけに絞り込むフィルタ
+  const [showInternalLibOnly, setShowInternalLibOnly] = useState<boolean>(false);
+
+  const allProofIssues = useMemo(function () {
+    if (!proofResult) return [];
+    return [
+      ...proofResult.criticalIssues,
+      ...proofResult.majorIssues,
+      ...proofResult.minorIssues,
+    ];
+  }, [proofResult]);
+
+  const isInternalLibIssue = function (i: { agentName?: string }) {
+    return !!i && typeof i.agentName === "string" && i.agentName.indexOf("社内ライブラリ") !== -1;
+  };
+  const internalLibCount = allProofIssues.filter(isInternalLibIssue).length;
+  const displayedIssues = showInternalLibOnly
+    ? allProofIssues.filter(isInternalLibIssue)
+    : allProofIssues;
 
   // 記事全体修正用state
   const [wholeRevisionPrompt, setWholeRevisionPrompt] = useState<string>("");
@@ -471,7 +490,17 @@ ${article.plainText}`;
 
           {/* 指摘事項サマリー */}
           <div>
-            <h4 className="text-sm font-bold text-gray-700 mb-2">指摘事項</h4>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-bold text-gray-700">指摘事項</h4>
+              <label className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={showInternalLibOnly}
+                  onChange={(e) => setShowInternalLibOnly(e.target.checked)}
+                />
+                社内ライブラリ照合のみ（{internalLibCount}件）
+              </label>
+            </div>
             <div className="grid grid-cols-3 gap-2 mb-2 text-sm">
               <div className="bg-white rounded p-2 border">
                 <span className="text-red-600 font-semibold">重大:</span>{" "}
@@ -487,12 +516,11 @@ ${article.plainText}`;
               </div>
             </div>
 
-            {proofResult.criticalIssues.length +
-              proofResult.majorIssues.length +
-              proofResult.minorIssues.length ===
-            0 ? (
+            {displayedIssues.length === 0 ? (
               <div className="text-sm text-green-700 bg-white p-3 rounded border border-green-200">
-                ✅ 指摘事項は検出されませんでした。
+                {showInternalLibOnly
+                  ? "✅ 社内ライブラリ照合の指摘はありません。"
+                  : "✅ 指摘事項は検出されませんでした。"}
               </div>
             ) : (
               <details className="text-sm" open>
@@ -500,11 +528,7 @@ ${article.plainText}`;
                   指摘の詳細を表示
                 </summary>
                 <ul className="mt-2 space-y-2">
-                  {[
-                    ...proofResult.criticalIssues,
-                    ...proofResult.majorIssues,
-                    ...proofResult.minorIssues,
-                  ]
+                  {displayedIssues
                     .slice(0, 30)
                     .map(function (issue, idx) {
                       var severityLabel =
@@ -591,70 +615,6 @@ ${article.plainText}`;
             )}
           </div>
 
-          {/* 改善提案 */}
-          {proofResult.suggestions && proofResult.suggestions.length > 0 && (
-            <div>
-              <h4 className="text-sm font-bold text-gray-700 mb-2">
-                改善提案（{proofResult.suggestions.length}件）
-              </h4>
-              <details className="text-sm" open>
-                <summary className="cursor-pointer text-blue-700 hover:underline font-semibold">
-                  提案を表示
-                </summary>
-                <ul className="mt-2 space-y-2">
-                  {proofResult.suggestions
-                    .slice(0, 15)
-                    .map(function (s, idx) {
-                      var priorityLabel =
-                        s.priority === "high"
-                          ? "優先度・高"
-                          : s.priority === "medium"
-                          ? "優先度・中"
-                          : "優先度・低";
-                      var priorityColor =
-                        s.priority === "high"
-                          ? "bg-red-100 text-red-800"
-                          : s.priority === "medium"
-                          ? "bg-amber-100 text-amber-800"
-                          : "bg-gray-100 text-gray-700";
-                      return (
-                        <li
-                          key={idx}
-                          className="bg-white p-3 rounded border border-gray-200"
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <span
-                              className={
-                                "text-xs font-bold px-2 py-0.5 rounded " +
-                                priorityColor
-                              }
-                            >
-                              {priorityLabel}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {s.type}
-                            </span>
-                          </div>
-                          <div className="text-gray-800 mb-1">
-                            {s.description}
-                          </div>
-                          {s.implementation && (
-                            <div className="text-xs bg-blue-50 border-l-2 border-blue-300 px-2 py-1 my-1">
-                              <span className="font-semibold text-blue-700">
-                                実装方法:
-                              </span>{" "}
-                              <span className="text-gray-700">
-                                {s.implementation}
-                              </span>
-                            </div>
-                          )}
-                        </li>
-                      );
-                    })}
-                </ul>
-              </details>
-            </div>
-          )}
         </div>
       )}
 
