@@ -400,10 +400,10 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
         );
 
         // Ver.3エージェントで生成
-        // 目標文字数: characterCountAnalysis があればその値、なければ5500文字
+        // 目標文字数: characterCountAnalysis があればその値、なければ7000文字（目安6,000〜8,000・上限8,000）
         const targetChars = actualOutline.characterCountAnalysis
-          ? Math.min(actualOutline.characterCountAnalysis.average, 6000)
-          : 5500;
+          ? Math.min(actualOutline.characterCountAnalysis.average, 8000)
+          : 7000;
 
         // BOX画像アセットを取得（失敗しても記事生成は続行）
         setGenerationProgress("BOX画像素材を取得中...");
