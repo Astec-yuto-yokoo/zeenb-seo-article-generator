@@ -29,8 +29,18 @@ const genAI = new GoogleGenerativeAI(apiKey);
 const ANTHROPIC_API_KEY =
   import.meta.env.VITE_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
 const anthropic = ANTHROPIC_API_KEY
-  ? new Anthropic({ apiKey: ANTHROPIC_API_KEY, dangerouslyAllowBrowser: true })
+  ? new Anthropic({
+      apiKey: ANTHROPIC_API_KEY,
+      dangerouslyAllowBrowser: true,
+      timeout: 180000, // 3分。ストリーム停止時のハング防止
+      maxRetries: 2,
+    })
   : null;
+
+// 構成生成ストリームのタイムアウト（ms）。
+// SSEは開通時にHTTP 200を返すため、完了イベントが来ずにストール
+// すると finalMessage() が永久に未解決となる。明示的にabort＆rejectする。
+const OUTLINE_STREAM_TIMEOUT_MS = 180000;
 // 構成案モデルは環境変数で切替可能（未指定時はSonnet 4.6）
 const OUTLINE_MODEL =
   import.meta.env.VITE_CLAUDE_OUTLINE_MODEL || "claude-sonnet-4-6";
@@ -54,7 +64,32 @@ async function generateOutlineJsonWithClaude(
       "You are a JSON generator. Output ONLY a single valid JSON object. Do not use markdown code fences (```), and do not add any explanation before or after the JSON.",
     messages: [{ role: "user", content: prompt }],
   } as any);
-  const msg = await stream.finalMessage();
+
+  // ストリームがストールした場合に永久待機しないよう、タイムアウトで abort＆reject する
+  let timeoutId: any = null;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      try {
+        stream.abort();
+      } catch (abortErr) {
+        console.warn("ストリームabort時の警告:", abortErr);
+      }
+      reject(
+        new Error(
+          `Claude構成生成がタイムアウトしました（${OUTLINE_STREAM_TIMEOUT_MS / 1000}秒）。再度お試しください。`
+        )
+      );
+    }, OUTLINE_STREAM_TIMEOUT_MS);
+  });
+
+  let msg: any;
+  try {
+    msg = await Promise.race([stream.finalMessage(), timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
   let text = "";
   if (msg && msg.content) {
     for (const block of msg.content) {
