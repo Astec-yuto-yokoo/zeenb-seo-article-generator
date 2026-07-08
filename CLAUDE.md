@@ -26,8 +26,9 @@ curl http://localhost:3003/api/health
 |----------|------|
 | フロントエンド | React 19, Vite 6, TypeScript, Tailwind CSS |
 | バックエンド | Node.js, Express 4 |
-| AI（競合分析・構成・修正） | Gemini 2.5 Pro / 2.5 Flash（`@google/generative-ai`） |
-| AI（執筆） | Claude Opus 4.8（`@anthropic-ai/sdk`、ストリーミング） |
+| AI（競合分析・本文修正） | Gemini 2.5 Pro / 2.5 Flash（`@google/generative-ai`） |
+| AI（構成案生成） | Claude Sonnet 4.6（`@anthropic-ai/sdk`、`VITE_CLAUDE_OUTLINE_MODEL`で切替可） |
+| AI（執筆） | Claude（既定Opus 4.8 / `.env`でSonnet 4.6に切替中、`VITE_CLAUDE_WRITING_MODEL`） |
 | AI（最終校閲） | GPT-5 / gpt-5-mini / gpt-5-nano（OpenAI Responses API） |
 | AI（MoA相互検証） | Claude（`@anthropic-ai/sdk`） |
 | スクレイピング | Puppeteer（開発）/ puppeteer-core + @sparticuz/chromium（本番） |
@@ -173,7 +174,7 @@ DIFY_FACTCHECK_ENDPOINT                # 任意。未設定時は https://api.di
 ## H2ブロック単位修正機能
 
 ### 構成案H2修正（構成生成後・執筆前）
-- `services/outlineGeneratorV2.ts` の `reviseOutlineSection()` — 対象H2セクションの構成をGemini 2.5 Proで修正
+- `services/outlineGeneratorV2.ts` の `reviseOutlineSection()` — 対象H2セクションの構成をClaude Sonnet 4.6で修正
 - `components/OutlineDisplayV2.tsx` — 各H2ブロック下にtextarea＋「AI修正」ボタン
 - `App.tsx` — `onOutlineUpdate` コールバックで構成案stateを更新
 
