@@ -437,7 +437,7 @@ export async function reviseArticle(
 
     // モデル設定（既存の修正関数と同じ設定）
     const modelConfig: any = {
-      model: "gemini-2.5-pro",
+      model: "gemini-pro-latest",
       generationConfig: {
         temperature: 0.3, // 低めの温度で正確性重視
         maxOutputTokens: 16384, // 長文対応
@@ -612,7 +612,7 @@ ${relevantSegments
   }
 
   const modelConfig: any = {
-    model: "gemini-2.5-pro",
+    model: "gemini-pro-latest",
     generationConfig: {
       temperature: 0.3, // 低めの温度で正確性重視
       maxOutputTokens: 16384, // 長文対応（8192→16384）
@@ -1263,7 +1263,7 @@ ${relevantSegments
   }
 
   const modelConfig: any = {
-    model: "gemini-2.5-pro",
+    model: "gemini-pro-latest",
     generationConfig: {
       temperature: 0.3,
       maxOutputTokens: 16384, // 長文対応（8192→16384）
@@ -1722,7 +1722,7 @@ ${userPrompt}
 
   try {
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-pro",
+      model: "gemini-pro-latest",
       generationConfig: {
         temperature: 0.3,
         maxOutputTokens: 8192,
@@ -1855,7 +1855,7 @@ ${charCountInstruction}
 
   try {
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-pro",
+      model: "gemini-pro-latest",
       generationConfig: {
         temperature: 0.3,
         maxOutputTokens: dynamicMaxTokens,

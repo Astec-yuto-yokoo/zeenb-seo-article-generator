@@ -119,7 +119,7 @@ export class ParallelSearchEngine {
     if (!this.genAI) return [];
 
     const model = this.genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: "gemini-flash-latest",
       generationConfig: {
         temperature: 0.5,
         maxOutputTokens: 1024,
@@ -180,7 +180,7 @@ ${context.slice(0, 500)}
     if (!this.genAI) return [];
 
     const model = this.genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: "gemini-flash-latest",
       generationConfig: {
         temperature: 0.1,
         maxOutputTokens: 2048,
@@ -247,7 +247,7 @@ ${context.slice(0, 500)}
     }
 
     const model = this.genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: "gemini-flash-latest",
       generationConfig: {
         temperature: 0.2,
         maxOutputTokens: 1024,

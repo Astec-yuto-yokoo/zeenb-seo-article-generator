@@ -313,7 +313,7 @@ export async function analyzeForArticle(
   try {
     var genAI = new GoogleGenerativeAI(apiKey);
     var model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: "gemini-flash-latest",
       generationConfig: {
         temperature: 0.3,
         maxOutputTokens: 4096,

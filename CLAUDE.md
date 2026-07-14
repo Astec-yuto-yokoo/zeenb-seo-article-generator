@@ -119,8 +119,8 @@ const response = await (openai as any).responses.create({
 ## 環境変数
 
 ```
-GEMINI_API_KEY / VITE_GEMINI_API_KEY   # Gemini API（必須）
-GOOGLE_API_KEY / VITE_GOOGLE_API_KEY   # Custom Search API（必須）
+GEMINI_API_KEY                         # Gemini API（必須）。サーバー側のみ。VITE_版は廃止（下記セキュリティ参照）
+GOOGLE_API_KEY                         # Custom Search / Drive API（必須）。サーバー側のみ。VITE_版は廃止
 GOOGLE_SEARCH_ENGINE_ID / VITE_GOOGLE_SEARCH_ENGINE_ID  # カスタム検索エンジンID（必須）
 OPENAI_API_KEY                         # GPT-5最終校閲用
 ANTHROPIC_API_KEY / VITE_ANTHROPIC_API_KEY  # Claude（執筆=Opus 4.8 / MoA相互検証）用。執筆はブラウザ実行のためVITE_版が必須
@@ -138,7 +138,19 @@ DIFY_FACTCHECK_API_KEY                 # 社内ライブラリ・ファクトチ
 DIFY_FACTCHECK_ENDPOINT                # 任意。未設定時は https://api.dify.ai/v1/workflows/run
 ```
 
-`VITE_` プレフィックスのある変数のみブラウザ側で参照可能。
+`VITE_` プレフィックスのある変数のみブラウザ側で参照可能。**＝ `VITE_` を付けた秘密鍵はビルド時にJSバンドルへ平文で焼き込まれ、誰でも閲覧できる。** APIキー類に `VITE_` を付けてはならない。
+
+## Gemini APIキーのサーバー側化（絶対厳守）
+
+Gemini APIキーをブラウザに露出させない。実キーは**サーバー(`/api/gemini-proxy`)側のみ**が保持する。
+
+- **経路**: フロントの `@google/generative-ai` SDK は `vite.config.ts` の `resolve.alias`（`/^@google\/generative-ai$/` → `services/geminiSdkShim.ts`）で差し替えられ、全リクエストが `baseUrl: /api/gemini-proxy` 経由になる
+- **シム**: `services/geminiSdkShim.ts` が `GoogleGenerativeAI` を継承し、ダミーキーで生成＋`getGenerativeModel` に `baseUrl` と `x-api-key`（内部認証）を注入。実体SDKは `../node_modules/@google/generative-ai/dist/index.mjs` を相対パス参照（alias無限ループ回避・exports制約回避）
+- **サーバー**: `server/scraping-server.js` の `app.use("/api/gemini-proxy", authenticate, ...)` が `x-goog-api-key: process.env.GEMINI_API_KEY` を注入して Google へ転送。`authenticate` 適用・グローバル `apiLimiter` より前に登録（1記事で多数のGemini呼び出しが正当に発生するためレート制限対象外）。生成呼び出しタイムアウト180秒を付与
+- **vite.config.ts**: `define` には実キーを入れず、ダミー文字列 `GEMINI_CLIENT_PLACEHOLDER`（30字以上・"PLACEHOLDER"非含有）を `process.env.GEMINI_API_KEY` / `process.env.API_KEY` に注入。各サービスの起動時ガードを通し、`process.env.*` 参照のReferenceErrorを防ぐため。**この仕組み（alias/シム/プロキシ/ダミー注入）を削除・無効化してはならない**
+- **`.env` に `VITE_GEMINI_API_KEY` / `VITE_GOOGLE_API_KEY` を復活させてはならない**（Viteが自動でバンドルへ焼き込むため）
+- 3プロジェクト共通反映対象（apaman / zeenb / factory）
+- **未対応（別途要ローテーション）**: Anthropic・OpenAI・Serper の `VITE_` 版は依然ブラウザ露出。同様のサーバー側化が望ましい
 
 ## 見出し番号付与ルール（絶対厳守）
 

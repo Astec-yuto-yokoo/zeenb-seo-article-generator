@@ -1131,7 +1131,7 @@ export async function generateSectionV3(
 
   try {
     const modelConfig: any = {
-      model: "gemini-2.5-pro",
+      model: "gemini-pro-latest",
       generationConfig: {
         temperature: 0.7,
         maxOutputTokens: 8192, // セクション分割時も増加（4096→8192）

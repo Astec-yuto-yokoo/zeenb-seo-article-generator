@@ -114,7 +114,7 @@ async function ocrWithGemini(imageBuffers) {
 
   var allText = [];
   var url =
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" +
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=" +
     apiKey;
 
   for (var i = 0; i < imageBuffers.length; i++) {
