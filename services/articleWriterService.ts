@@ -5,7 +5,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { SeoOutline, CompetitorResearchResult, FrequencyWord, SubheadingWithNote } from '../types';
 
 // Viteの環境変数を使用（フロントエンドで実行されるため）
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY;
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
 if (!apiKey) {
     console.error('GEMINI_API_KEY not found in environment variables');
     throw new Error("GEMINI_API_KEY not set. Please set VITE_GEMINI_API_KEY in .env file.");
