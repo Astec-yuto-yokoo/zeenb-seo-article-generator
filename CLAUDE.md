@@ -155,6 +155,7 @@ Gemini APIキーをブラウザに露出させない。実キーは**サーバ�
   - **利用側**: `services/geminiService.ts` の `aiClients = [createProxiedGenAI()]`（実質シングルキー運用で従来挙動を維持）、`services/imageAnalyzer.ts` の `ai = createProxiedGenAI()`、`utils/filenameBasedMatcher.ts` も同様。**`new GoogleGenAI({ apiKey })` を直接生成してはならない**
   - **vite.config.ts**: `define` の `process.env.API_KEY` / `process.env.GEMINI_API_KEY` には実キーを入れず、ダミー文字列（`gemini-image-agent-proxied-no-client-key`）のみ注入。**`env.GEMINI_API_KEY` を焼き込む旧記述に戻してはならない**
   - CORS は各サーバーの `allowedOrigins` に画像エージェントのオリジン（5181 / 5177 / 5179）を登録済み。**この仕組みを削除・無効化してはならない**。3プロジェクト共通反映対象
+  - CORS の `allowedHeaders` に **`x-goog-api-key` / `x-goog-api-client` を含めること**（genai SDK が付与するため）。無いとブラウザのプリフライトで弾かれ画像生成が `Failed to fetch` になる。**これらを削除してはならない**
 - **未対応（別途要ローテーション）**: Anthropic・OpenAI・Serper の `VITE_` 版は依然ブラウザ露出。同様のサーバー側化が望ましい
 
 ## 見出し番号付与ルール（絶対厳守）

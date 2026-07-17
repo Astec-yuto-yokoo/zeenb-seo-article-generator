@@ -79,7 +79,9 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "x-api-key", "Authorization"],
+    // x-goog-api-key / x-goog-api-client は画像エージェントの @google/genai が付与するヘッダ。
+    // CORSプリフライトで許可しないと gemini-proxy 経由の画像生成が "Failed to fetch" になる。
+    allowedHeaders: ["Content-Type", "x-api-key", "Authorization", "x-goog-api-key", "x-goog-api-client"],
     exposedHeaders: ["Content-Range", "X-Content-Range"],
     maxAge: 86400, // 24時間キャッシュ
   })
