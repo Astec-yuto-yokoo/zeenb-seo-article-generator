@@ -21,7 +21,7 @@ interface OutlineDisplayV2Props {
   keyword: string;
   onOutlineUpdate?: (updatedOutline: SeoOutlineV2) => void; // 構成案更新コールバック
   onStartWriting?: () => void; // Ver.2執筆
-  onStartWritingV3?: () => void; // Ver.3執筆（Gemini Pro + Grounding）
+  onStartWritingV3?: () => void; // Ver.3執筆（Claude）
   availableMaterials?: ReferenceMaterial[];
 }
 

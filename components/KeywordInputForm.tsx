@@ -150,7 +150,7 @@ const KeywordInputForm: React.FC<KeywordInputFormProps> = ({
             <ol className="mt-2 text-xs text-gray-600 space-y-1 list-decimal list-inside">
               <li>競合サイト分析（15サイト）</li>
               <li>構成案生成（Ver.2）＋ 構成チェック</li>
-              <li>記事執筆（Ver.3 Gemini Pro + Grounding）</li>
+              <li>記事執筆（Ver.3 Claude 執筆）</li>
               <li>最終校閲（マルチエージェント10個）</li>
             </ol>
             <p className="mt-2 text-xs text-amber-600">
