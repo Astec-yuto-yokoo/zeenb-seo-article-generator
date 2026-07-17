@@ -1,5 +1,5 @@
 // ファイル名ベースの意味的画像マッチング
-import { GoogleGenAI } from "@google/genai";
+import { createProxiedGenAI } from "../services/geminiClient";
 
 // 類義語辞書（拡張可能）
 const SYNONYM_GROUPS = {
@@ -318,7 +318,9 @@ async function calculateSemanticSimilarity(
   apiKey: string
 ): Promise<number> {
   try {
-    const genAI = new GoogleGenAI({ apiKey });
+    // プロキシ化：実キーはブラウザに持たせない（サーバー /api/gemini-proxy が保持）。
+    // ※本パスは現状 useSemanticSimilarity:false のため未実行だが、経路を統一しておく。
+    const genAI = createProxiedGenAI();
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const prompt = `

@@ -150,6 +150,11 @@ Gemini APIキーをブラウザに露出させない。実キーは**サーバ�
 - **vite.config.ts**: `define` には実キーを入れず、ダミー文字列 `GEMINI_CLIENT_PLACEHOLDER`（30字以上・"PLACEHOLDER"非含有）を `process.env.GEMINI_API_KEY` / `process.env.API_KEY` に注入。各サービスの起動時ガードを通し、`process.env.*` 参照のReferenceErrorを防ぐため。**この仕組み（alias/シム/プロキシ/ダミー注入）を削除・無効化してはならない**
 - **`.env` に `VITE_GEMINI_API_KEY` / `VITE_GOOGLE_API_KEY` を復活させてはならない**（Viteが自動でバンドルへ焼き込むため）
 - 3プロジェクト共通反映対象（apaman / zeenb / factory）
+- **画像生成エージェント（`ai-article-imager-for-wordpress`）もプロキシ化済み**（本体とは別SDK `@google/genai` を使用）:
+  - **シム**: `services/geminiClient.ts` の `createProxiedGenAI()` が `GoogleGenAI` を `httpOptions.baseUrl = <VITE_API_URL>/gemini-proxy`（例: `http://localhost:3003/api/gemini-proxy`）＋ `headers: { "x-api-key": 内部キー }` で生成。ダミーキー `server-proxied-gemini-no-client-key` を渡し、実キーは持たせない。genai は URL を `{baseUrl}/{apiVersion(=v1beta)}/{path}` で組むため既存 `/api/gemini-proxy`（マウント部を剥がして Google へ転送）をそのまま流用できる
+  - **利用側**: `services/geminiService.ts` の `aiClients = [createProxiedGenAI()]`（実質シングルキー運用で従来挙動を維持）、`services/imageAnalyzer.ts` の `ai = createProxiedGenAI()`、`utils/filenameBasedMatcher.ts` も同様。**`new GoogleGenAI({ apiKey })` を直接生成してはならない**
+  - **vite.config.ts**: `define` の `process.env.API_KEY` / `process.env.GEMINI_API_KEY` には実キーを入れず、ダミー文字列（`gemini-image-agent-proxied-no-client-key`）のみ注入。**`env.GEMINI_API_KEY` を焼き込む旧記述に戻してはならない**
+  - CORS は各サーバーの `allowedOrigins` に画像エージェントのオリジン（5181 / 5177 / 5179）を登録済み。**この仕組みを削除・無効化してはならない**。3プロジェクト共通反映対象
 - **未対応（別途要ローテーション）**: Anthropic・OpenAI・Serper の `VITE_` 版は依然ブラウザ露出。同様のサーバー側化が望ましい
 
 ## 見出し番号付与ルール（絶対厳守）

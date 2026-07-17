@@ -1,4 +1,5 @@
 import { GoogleGenAI, Modality } from "@google/genai";
+import { createProxiedGenAI } from "./geminiClient";
 
 // エクスポネンシャルバックオフ用のヘルパー関数
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -33,25 +34,12 @@ async function retryWithExponentialBackoff<T>(
   throw new Error("Max retries exceeded");
 }
 
-// 複数のAPIキーをサポート
-const API_KEYS = [
-  process.env.API_KEY,
-  process.env.API_KEY_2,
-  process.env.API_KEY_3,
-].filter(Boolean); // 存在するキーのみ使用
+// プロキシ化：実APIキーはブラウザに焼き込まない。サーバー（/api/gemini-proxy）が実キーを保持し
+// x-goog-api-key を注入する。実キーを持たないため並列処理は単一プロキシクライアントで行う
+// （従来も実際に有効なキーは1つのみ＝挙動は変わらない）。
+const aiClients = [createProxiedGenAI()];
 
-if (API_KEYS.length === 0) {
-  throw new Error(
-    "At least one API_KEY environment variable must be set (API_KEY, API_KEY_2, or API_KEY_3)."
-  );
-}
-
-console.log(`✅ ${API_KEYS.length}個のAPIキーが設定されています`);
-
-// 各APIキー用のクライアントを作成
-const aiClients = API_KEYS.map(
-  (apiKey) => new GoogleGenAI({ apiKey: apiKey! })
-);
+console.log(`✅ Geminiプロキシ経由でクライアントを初期化しました（実キーはサーバー側のみ）`);
 
 function dataUrlToBlob(dataUrl: string): { data: string; mimeType: string } {
   const parts = dataUrl.split(",");
@@ -659,7 +647,7 @@ export interface ImageGenerationResult {
 export const generateImagesInParallel = async (
   tasks: ImageGenerationTask[]
 ): Promise<ImageGenerationResult[]> => {
-  const apiKeyCount = API_KEYS.length;
+  const apiKeyCount = aiClients.length;
 
   console.log(
     `🚀 並列画像生成開始: ${tasks.length}個のタスクを${apiKeyCount}個のAPIキーで処理`

@@ -19,8 +19,10 @@ export default defineConfig(({ mode }) => {
       },
       assetsInclude: ['**/*.png', '**/*.jpg', '**/*.jpeg'],
       define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+        // プロキシ化：実キーはブラウザバンドルへ焼き込まない（サーバー /api/gemini-proxy が保持）。
+        // 後方互換のためダミー値のみ注入する（実キーは注入しないこと）。
+        'process.env.API_KEY': JSON.stringify('gemini-image-agent-proxied-no-client-key'),
+        'process.env.GEMINI_API_KEY': JSON.stringify('gemini-image-agent-proxied-no-client-key'),
         // APIサーバーのURL（画像エージェントはプロキシ未設定のため常に直接アクセス）
         'import.meta.env.VITE_API_URL': JSON.stringify('http://localhost:3003/api'),
         'import.meta.env.VITE_INTERNAL_API_KEY': JSON.stringify(env.VITE_INTERNAL_API_KEY),
