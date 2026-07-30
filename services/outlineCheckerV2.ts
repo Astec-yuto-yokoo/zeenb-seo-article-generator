@@ -10,6 +10,24 @@ import type {
 } from '../types';
 import { countCharacters } from '../utils/characterCounter';
 import { generateOutlineV2 } from './outlineGeneratorV2';
+
+// 生成系呼び出しがストールしても永久待機しないよう、タイムアウトで reject するヘルパー
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timeoutId: any = null;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${label}がタイムアウトしました（${ms / 1000}秒）。`));
+    }, ms);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }) as Promise<T>;
+}
+
+// 構成修正時の生成タイムアウト（ms）
+const FIX_GENERATION_TIMEOUT_MS = 180000;
 // 自社サービス関連のimportは汎用化のため削除
 // import { getCompanyInfo } from './companyService';
 
@@ -575,7 +593,7 @@ ${h3Shortage ? `
     const topP = attemptNumber === 0 ? 0.95 : 0.85;
     
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-pro",
+      model: "gemini-pro-latest",
       generationConfig: {
         temperature, // 修正回数に応じて正確性を高める
         topP,        // 修正回数に応じて確実性を高める
@@ -584,7 +602,11 @@ ${h3Shortage ? `
       }
     });
 
-    const result = await model.generateContent(fixPrompt);
+    const result = await withTimeout(
+      model.generateContent(fixPrompt),
+      FIX_GENERATION_TIMEOUT_MS,
+      "構成案の修正生成"
+    );
     let responseText = result.response.text();
     
     // JSONの前後の不要な文字を削除

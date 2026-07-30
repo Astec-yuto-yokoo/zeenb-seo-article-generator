@@ -2,7 +2,8 @@
 // SEO構成ワークフローに基づいた新しい構成案生成
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import type { 
+import Anthropic from "@anthropic-ai/sdk";
+import type {
   SeoOutlineV2, 
   CompetitorResearchResult, 
   ArticleAnalysis,
@@ -23,6 +24,80 @@ if (!apiKey) {
     throw new Error("GEMINI_API_KEY not set.");
 }
 const genAI = new GoogleGenerativeAI(apiKey);
+
+// 構成案生成はClaude Sonnet 4.6を使用（競合分析・チェックはGeminiのまま）
+const ANTHROPIC_API_KEY =
+  import.meta.env.VITE_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
+const anthropic = ANTHROPIC_API_KEY
+  ? new Anthropic({
+      apiKey: ANTHROPIC_API_KEY,
+      dangerouslyAllowBrowser: true,
+      timeout: 180000, // 3分。ストリーム停止時のハング防止
+      maxRetries: 2,
+    })
+  : null;
+
+// 構成生成ストリームのタイムアウト（ms）。
+// SSEは開通時にHTTP 200を返すため、完了イベントが来ずにストール
+// すると finalMessage() が永久に未解決となる。明示的にabort＆rejectする。
+const OUTLINE_STREAM_TIMEOUT_MS = 180000;
+// 構成案モデルは環境変数で切替可能（未指定時はSonnet 4.6）
+const OUTLINE_MODEL =
+  import.meta.env.VITE_CLAUDE_OUTLINE_MODEL || "claude-sonnet-4-6";
+
+// 構成案JSONをClaudeで生成するヘルパー。
+// Geminiの responseMimeType 相当（JSON強制）は、systemでのJSON専用指示＋
+// 呼び出し側の```フェンス除去/JSON.parse で担保する。ストリーミングで受信。
+async function generateOutlineJsonWithClaude(
+  prompt: string,
+  maxTokens: number
+): Promise<string> {
+  if (!anthropic) {
+    throw new Error(
+      "Claude APIキー(ANTHROPIC_API_KEY / VITE_ANTHROPIC_API_KEY)が未設定です。構成案生成を実行できません。"
+    );
+  }
+  const stream = anthropic.messages.stream({
+    model: OUTLINE_MODEL,
+    max_tokens: maxTokens,
+    system:
+      "You are a JSON generator. Output ONLY a single valid JSON object. Do not use markdown code fences (```), and do not add any explanation before or after the JSON.",
+    messages: [{ role: "user", content: prompt }],
+  } as any);
+
+  // ストリームがストールした場合に永久待機しないよう、タイムアウトで abort＆reject する
+  let timeoutId: any = null;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      try {
+        stream.abort();
+      } catch (abortErr) {
+        console.warn("ストリームabort時の警告:", abortErr);
+      }
+      reject(
+        new Error(
+          `Claude構成生成がタイムアウトしました（${OUTLINE_STREAM_TIMEOUT_MS / 1000}秒）。再度お試しください。`
+        )
+      );
+    }, OUTLINE_STREAM_TIMEOUT_MS);
+  });
+
+  let msg: any;
+  try {
+    msg = await Promise.race([stream.finalMessage(), timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+  let text = "";
+  if (msg && msg.content) {
+    for (const block of msg.content) {
+      if (block && block.type === "text") text += block.text;
+    }
+  }
+  return text;
+}
 
 /**
  * キーワードをスマート分割
@@ -804,17 +879,7 @@ ${referenceMaterialContext}
 }`;
 
   try {
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-pro",
-      generationConfig: {
-        temperature: 0.5, // バランス重視（創造性と正確性）
-        maxOutputTokens: 16000, // トークン数を増やして詳細な構成を生成可能に
-        responseMimeType: "application/json"
-      }
-    });
-
-    const result = await model.generateContent(prompt);
-    let responseText = result.response.text();
+    let responseText = await generateOutlineJsonWithClaude(prompt, 16000);
     
     // JSONの前後の不要な文字を削除
     responseText = responseText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
@@ -1082,17 +1147,7 @@ ${userPrompt}
 }`;
 
   try {
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-pro",
-      generationConfig: {
-        temperature: 0.4,
-        maxOutputTokens: 8000,
-        responseMimeType: "application/json"
-      }
-    });
-
-    const result = await model.generateContent(prompt);
-    let responseText = result.response.text();
+    let responseText = await generateOutlineJsonWithClaude(prompt, 8000);
     responseText = responseText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
 
     const revised = JSON.parse(responseText) as { title: string; outline: OutlineSectionV2[] };
@@ -1167,17 +1222,7 @@ ${outline.outline.map((s, i) => `H2-${i + 1}: ${s.heading}`).join('\n')}
 }`;
 
   try {
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-pro",
-      generationConfig: {
-        temperature: 0.4,
-        maxOutputTokens: 4000,
-        responseMimeType: "application/json"
-      }
-    });
-
-    const result = await model.generateContent(prompt);
-    let responseText = result.response.text();
+    let responseText = await generateOutlineJsonWithClaude(prompt, 4000);
     responseText = responseText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
 
     const revised = JSON.parse(responseText) as OutlineSectionV2;

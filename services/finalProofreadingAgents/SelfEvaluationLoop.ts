@@ -172,7 +172,7 @@ export class SelfEvaluationLoop {
     }
 
     const model = this.genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: "gemini-flash-latest",
       generationConfig: {
         temperature: 0.4,
         maxOutputTokens: 4096,

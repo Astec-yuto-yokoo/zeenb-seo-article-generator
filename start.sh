@@ -3,6 +3,13 @@
 # SEO Content Generator 起動スクリプト
 # PC再起動後にこのスクリプトを実行すると、全てのサーバーが起動します
 
+# --- 起動元を必ずこのスクリプトのあるディレクトリに固定する ---
+# 相対パス（server/... や ai-article-imager-for-wordpress）が別クローンを掴むのを防ぐ。
+# どのディレクトリから実行しても、常にこの start.sh と同じ場所のプロジェクトを起動する。
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR" || { echo "❌ プロジェクトディレクトリへ移動できませんでした: $SCRIPT_DIR"; exit 1; }
+echo "📂 起動ディレクトリ: $SCRIPT_DIR"
+
 echo "🚀 SEO Content Generator を起動します..."
 
 # 既存のプロセスを確認

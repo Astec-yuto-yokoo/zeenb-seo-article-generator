@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { CompetitorResearchResult, ArticleAnalysis, HeadingStructure } from '../types';
 
 // API初期化
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY;
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
 if (!apiKey || apiKey === '' || apiKey === 'undefined') {
     throw new Error("GEMINI_API_KEY not set. Please check your .env file.");
 }
@@ -155,7 +155,7 @@ export const generateCompetitorResearch = async (keyword: string): Promise<Compe
     console.log('Starting competitor research for keyword:', keyword);
     
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.5-flash"
+      model: "gemini-flash-latest"
     });
     
     const result = await model.generateContent(prompt);

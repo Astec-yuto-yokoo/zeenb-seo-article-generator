@@ -111,7 +111,7 @@ class GeminiFactChecker {
     }
 
     const model = this.genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: "gemini-flash-latest",
       generationConfig: {
         temperature: 0.2,
         maxOutputTokens: 2048,
@@ -187,7 +187,7 @@ ${claim.originalIssue.description}
     }
 
     const model = this.genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: "gemini-flash-latest",
       generationConfig: {
         temperature: 0.1,
         maxOutputTokens: 2048,

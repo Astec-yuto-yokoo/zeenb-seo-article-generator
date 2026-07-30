@@ -79,7 +79,9 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "x-api-key", "Authorization"],
+    // x-goog-api-key / x-goog-api-client は画像エージェントの @google/genai が付与するヘッダ。
+    // CORSプリフライトで許可しないと gemini-proxy 経由の画像生成が "Failed to fetch" になる。
+    allowedHeaders: ["Content-Type", "x-api-key", "Authorization", "x-goog-api-key", "x-goog-api-client"],
     exposedHeaders: ["Content-Range", "X-Content-Range"],
     maxAge: 86400, // 24時間キャッシュ
   })
@@ -148,6 +150,66 @@ const authenticate = (req, res, next) => {
   console.log(`✅ 認証成功: ${req.ip} - ${req.path}`);
   next();
 };
+
+// ===== Gemini APIプロキシ（セキュリティ：APIキーをサーバー側のみに保持）=====
+// フロントは @google/generative-ai SDK の baseUrl を /api/gemini-proxy に向けて呼び出す
+// （services/geminiSdkShim.ts が差し替え）。実キーはここで x-goog-api-key に注入する。
+// クライアントは実キーを一切持たない。
+// - authenticate は明示適用（x-api-key で内部認証）。
+// - グローバルの apiLimiter（100req/15分）より前に登録し、この経路は対象外にする
+//   （1記事の生成で正当に多数のGemini呼び出しが発生するため）。
+const GEMINI_PROXY_UPSTREAM = "https://generativelanguage.googleapis.com";
+const GEMINI_PROXY_TIMEOUT_MS = 180000; // 生成呼び出しのタイムアウト（絶対厳守ルール）
+
+app.use("/api/gemini-proxy", authenticate, async (req, res) => {
+  const realKey = process.env.GEMINI_API_KEY;
+  if (!realKey || realKey === "") {
+    console.error("⚠️ GEMINI_API_KEY が未設定です（gemini-proxy）");
+    return res.status(500).json({ error: "Server configuration error" });
+  }
+
+  // app.use のマウントにより req.path はプロキシ以降のパス
+  // 例: /v1beta/models/gemini-flash-latest:generateContent
+  let queryString = "";
+  const qIndex = req.originalUrl.indexOf("?");
+  if (qIndex >= 0) {
+    queryString = req.originalUrl.slice(qIndex);
+  }
+  const upstreamUrl = GEMINI_PROXY_UPSTREAM + req.path + queryString;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, GEMINI_PROXY_TIMEOUT_MS);
+
+  try {
+    const isBodyless = req.method === "GET" || req.method === "HEAD";
+    const upstreamRes = await fetch(upstreamUrl, {
+      method: req.method,
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": realKey,
+      },
+      body: isBodyless ? undefined : JSON.stringify(req.body),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+
+    const bodyText = await upstreamRes.text();
+    const contentType = upstreamRes.headers.get("content-type");
+    res.status(upstreamRes.status);
+    res.set("Content-Type", contentType ? contentType : "application/json");
+    return res.send(bodyText);
+  } catch (error) {
+    clearTimeout(timer);
+    const message = error && error.message ? error.message : String(error);
+    console.error("Gemini proxy error:", message);
+    return res.status(502).json({
+      error: "Gemini proxy error",
+      detail: process.env.NODE_ENV === "production" ? undefined : message,
+    });
+  }
+});
 
 // 全APIエンドポイントに認証とRate Limitingを適用
 app.use("/api", authenticate);

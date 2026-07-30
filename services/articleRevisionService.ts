@@ -437,7 +437,7 @@ export async function reviseArticle(
 
     // モデル設定（既存の修正関数と同じ設定）
     const modelConfig: any = {
-      model: "gemini-2.5-pro",
+      model: "gemini-pro-latest",
       generationConfig: {
         temperature: 0.3, // 低めの温度で正確性重視
         maxOutputTokens: 16384, // 長文対応
@@ -612,7 +612,7 @@ ${relevantSegments
   }
 
   const modelConfig: any = {
-    model: "gemini-2.5-pro",
+    model: "gemini-pro-latest",
     generationConfig: {
       temperature: 0.3, // 低めの温度で正確性重視
       maxOutputTokens: 16384, // 長文対応（8192→16384）
@@ -1263,7 +1263,7 @@ ${relevantSegments
   }
 
   const modelConfig: any = {
-    model: "gemini-2.5-pro",
+    model: "gemini-pro-latest",
     generationConfig: {
       temperature: 0.3,
       maxOutputTokens: 16384, // 長文対応（8192→16384）
@@ -1722,7 +1722,7 @@ ${userPrompt}
 
   try {
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-pro",
+      model: "gemini-pro-latest",
       generationConfig: {
         temperature: 0.3,
         maxOutputTokens: 8192,
@@ -1756,5 +1756,134 @@ ${userPrompt}
   } catch (error) {
     console.error('記事H2セクション修正エラー:', error);
     throw new Error(`H2セクション「${h2Heading}」の修正に失敗しました`);
+  }
+}
+
+
+// ============================================================
+// 記事全体一括修正（自然言語指示）
+// ============================================================
+
+function countPlainTextChars(html: string): number {
+  return html
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\s+/g, "")
+    .length;
+}
+
+// ユーザー指示から目標文字数を抽出する
+// 例: 「7000文字」「7,000字」「7千字」「全体的に7000文字に」「5500字程度」
+function extractTargetCharCount(userPrompt: string): number | null {
+  // パターン1: 半角数字 + 文字/字
+  const m1 = userPrompt.match(/([0-9,]{3,6})\s*(?:文字|字)/);
+  if (m1 && m1[1]) {
+    const n = parseInt(m1[1].replace(/,/g, ""), 10);
+    if (!isNaN(n) && n >= 500 && n <= 30000) return n;
+  }
+  // パターン2: 「N千字」「N千文字」
+  const m2 = userPrompt.match(/([1-9])\s*千\s*(?:文字|字)/);
+  if (m2 && m2[1]) {
+    const n = parseInt(m2[1], 10) * 1000;
+    if (!isNaN(n)) return n;
+  }
+  return null;
+}
+
+export async function reviseArticleWhole(
+  fullArticleHtml: string,
+  userPrompt: string,
+  keyword: string
+): Promise<string> {
+  console.log(`🔧 記事全体修正開始`);
+  console.log(`📝 修正指示: ${userPrompt}`);
+
+  // 目標文字数の抽出と方向性の判定
+  const targetCharCount = extractTargetCharCount(userPrompt);
+  const currentCharCount = countPlainTextChars(fullArticleHtml);
+  let charCountInstruction = "";
+  let dynamicMaxTokens = 32768;
+
+  if (targetCharCount !== null) {
+    const direction =
+      currentCharCount > targetCharCount * 1.05
+        ? "圧縮"
+        : currentCharCount < targetCharCount * 0.95
+        ? "拡張"
+        : "微調整";
+    const lowerBound = Math.floor(targetCharCount * 0.9);
+    const upperBound = Math.ceil(targetCharCount * 1.1);
+    // 目標文字数に応じてmaxOutputTokensを動的に絞る（日本語1字≒0.7〜1トークン）
+    // 余裕を持って目標の約2倍トークンに制限（HTML/タグ込みでも収まる範囲）
+    dynamicMaxTokens = Math.min(32768, Math.max(4096, Math.ceil(targetCharCount * 2)));
+
+    charCountInstruction = `
+【文字数制御（最優先・絶対厳守）】
+- 現在の本文文字数：約${currentCharCount}字
+- 目標文字数：${targetCharCount}字（許容範囲：${lowerBound}〜${upperBound}字、±10%以内）
+- 方向性：${direction}（現在${currentCharCount}字 → 目標${targetCharCount}字）
+- 【絶対禁止】許容上限（${upperBound}字）を超えること
+- 文字数カウントはHTMLタグ・wp:コメントを除いた本文のみで判定する
+- ${direction === "圧縮" ? "冗長な表現・重複説明・装飾的な前置きを削り、要点を凝縮して目標字数に収める" : ""}${direction === "拡張" ? "具体例・数値・根拠を補強して目標字数まで肉付けする" : ""}${direction === "微調整" ? "現状の文字数から大きく動かさず、目標±10%の範囲に収める" : ""}
+- この文字数制約は、本ルール内の他のいかなる「構成維持」「品質向上」指示よりも優先する
+`;
+    console.log(`📏 目標文字数: ${targetCharCount}字（現在: ${currentCharCount}字、方向: ${direction}、maxOutputTokens: ${dynamicMaxTokens}）`);
+  }
+
+  const prompt = `あなたはSEO記事修正の専門家です。以下の記事全体をユーザーの指示に基づいて修正してください。
+
+【キーワード】
+${keyword}
+
+【修正対象の記事HTML全文】
+${fullArticleHtml}
+
+【ユーザーの修正指示】
+${userPrompt}
+${charCountInstruction}
+【重要ルール】
+- 記事HTML全文（修正後）のみを返すこと
+- H2/H3の**見出し構成（タイトル文言と順序）は維持**するが、本文は上記の目標文字数に合わせて圧縮／拡張して構わない
+- HTMLタグ構造を維持する（WordPress Gutenberg互換のwp:コメントタグも保持）
+- 文体（です・ます調）を維持する
+- <b>タグではなく<strong>タグを使う
+- 箇条書きは <!-- wp:list --> / <!-- wp:list-item --> の構造を維持する
+- テーブルは <!-- wp:table --> / <figure class="wp-block-table"> の構造を維持する
+- 出典URLのaタグは削除しない
+- 1段落（<p>タグ）あたり最大140字を守る
+- 説明・注釈は一切出力しない。修正後のHTML全文のみを返すこと`;
+
+  try {
+    const model = genAI.getGenerativeModel({
+      model: "gemini-pro-latest",
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: dynamicMaxTokens,
+      },
+    });
+
+    const startTime = Date.now();
+    const result = await model.generateContent(prompt);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`✅ API応答受信（処理時間: ${elapsed}秒）`);
+
+    let revised = result.response.text();
+    if (!revised) {
+      throw new Error("修正結果が生成されませんでした");
+    }
+
+    // コードブロックマーカーを除去
+    revised = revised.replace(/^```html\s*/i, '').replace(/\s*```$/i, '').trim();
+
+    // <b>→<strong>変換
+    revised = revised
+      .replace(/<b>/gi, "<strong>")
+      .replace(/<\/b>/gi, "</strong>");
+
+    console.log(`✅ 記事全体修正完了`);
+    return revised;
+  } catch (error) {
+    console.error('記事全体修正エラー:', error);
+    throw new Error('記事全体の修正に失敗しました');
   }
 }

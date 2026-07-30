@@ -120,10 +120,17 @@ export class InternalLibraryFactCheckAgent extends BaseProofreadingAgent {
 
   /**
    * Dify が返す fact_check_result（人間可読のレポートテキスト）を Issue/Suggestion に整形する。
-   * Dify 側のフォーマットに依存しないよう、ヒューリスティックに解析する。
-   * - 「■」「【」始まりのブロックをセクション単位として抽出
-   * - 「問題なし」「OK」「合致」のみのレポート → score=95、issuesなし
-   * - それ以外 → 各ブロックを major issue として登録、score を内容量に応じて減点
+   *
+   * Dify の出力は判定単位のマーカーで構成される（フォーマットは2系統を観測）:
+   *   - 「[判定] 〜」形式
+   *   - 「✅ / ⚠️ / ❌」絵文字形式
+   * これらを「判定（finding）」の最小単位として抽出し、3種類に分類する:
+   *   - problem     … 社内定義と不一致・矛盾（❌ / 不正確 等）→ 減点対象
+   *   - unconfirmed … ナレッジベースに該当が無く確認できない（⚠️ / 確認できない 等）
+   *                   → 「誤り」ではないため減点しない。Dify更新用にリスト化する
+   *   - positive    … 一致・問題なし（✅ 等）→ 何もしない（無視）
+   * 「■ 見出し」は文脈、「【総合評価】「【ファクトチェック結果】」等の【】総括ブロックは
+   * 個別判定の要約に過ぎないためスコア対象から除外する。
    */
   private parseFactCheckResult(text: string): {
     score: number;
@@ -140,76 +147,132 @@ export class InternalLibraryFactCheckAgent extends BaseProofreadingAgent {
       };
     }
 
-    // 全文がポジティブ判定のみのケース
-    const looksClean =
-      /問題なし|問題はありません|社内定義と合致|指摘事項なし|OK\b/i.test(
-        text
-      ) &&
-      !/誤|不一致|要修正|要確認|逸脱|矛盾/.test(text);
+    const findings = this.extractFindings(text);
 
-    if (looksClean) {
+    // マーカー判定が1件も取れない（想定外フォーマット）場合は全文ヒューリスティックにフォールバック
+    if (findings.length === 0) {
+      const negativeAll = /不正確|不一致|矛盾|誤り|虚偽|逸脱/.test(text);
+      if (!negativeAll) {
+        return {
+          score: 95,
+          issues: [],
+          suggestions: [
+            {
+              type: "internal-library",
+              description:
+                "社内ライブラリ照合：指摘事項なし。社内定義と整合しています。",
+              implementation:
+                "現状の表現を維持してください（全文レポートは管理画面参照）。",
+              priority: "low",
+            },
+          ],
+          confidence: 80,
+        };
+      }
       return {
-        score: 95,
-        issues: [],
-        suggestions: [
+        score: 80,
+        issues: [
           {
-            type: "internal-library",
+            type: "factual-error",
+            severity: "major",
+            location: "社内ライブラリ照合",
             description:
-              "社内ライブラリ照合：指摘事項なし。社内定義と整合しています。",
-            implementation:
-              "現状の表現を維持してください（社内ライブラリチェッカー全文は管理画面のレポート参照）。",
-            priority: "low",
+              text.length > 600 ? text.substring(0, 600) + "…" : text,
+            original: "",
+            confidence: 80,
           },
         ],
-        confidence: 90,
+        suggestions: [],
+        confidence: 80,
       };
     }
 
-    // 「■ 〜」または「【〜】」で始まるブロック単位に分割
-    const blocks = this.splitBlocks(text);
+    const problems = findings.filter((f) => f.kind === "problem");
+    const unconfirmed = findings.filter((f) => f.kind === "unconfirmed");
 
     const issues: Issue[] = [];
-    blocks.forEach((block) => {
-      const title = this.extractTitle(block);
-      const detail = block.length > 600 ? block.substring(0, 600) + "…" : block;
 
-      // ブロック内に「問題なし」のみ含まれる場合はスキップ
-      if (
-        /問題なし|問題はありません|合致|該当なし/.test(block) &&
-        !/誤|不一致|要修正|要確認|逸脱|矛盾/.test(block)
-      ) {
-        return;
-      }
-
+    // 不一致・矛盾 → major（減点対象）
+    problems.forEach((f) => {
+      const detail = f.text.length > 600 ? f.text.substring(0, 600) + "…" : f.text;
       issues.push({
         type: "factual-error",
         severity: "major",
-        location: title || "社内ライブラリ照合",
+        location: f.heading || "社内ライブラリ照合",
         description: detail,
         original: "",
         confidence: 85,
+        agentName: this.name,
       });
     });
 
-    // スコア算出：指摘数に応じて減点（最低60）
-    let score = 90;
-    if (issues.length === 1) score = 85;
-    else if (issues.length === 2) score = 78;
-    else if (issues.length === 3) score = 72;
-    else if (issues.length >= 4) score = 65;
+    // 確認できなかった項目 → minor（減点しない・可視化のみ）
+    // ※ IntegrationAgent は info を critical/major/minor のどれにも振り分けず捨てるため、
+    //    UI に表示するには minor にする必要がある（スコアは件数非依存なので減点されない）。
+    unconfirmed.forEach((f) => {
+      issues.push({
+        type: "factual-error",
+        severity: "minor",
+        location: f.heading || "社内ライブラリ照合",
+        description:
+          "【ライブラリ未確認】" +
+          f.label +
+          (f.detail ? " — " + f.detail : "") +
+          "（ナレッジベースに該当が無く確認できず／減点対象外）",
+        original: "",
+        confidence: 50,
+        agentName: this.name,
+      });
+    });
 
-    const suggestions: Suggestion[] = [
-      {
+    // スコア算出：problem（不一致）件数のみで減点。unconfirmed は減点しない
+    let score = 95;
+    if (problems.length === 1) score = 85;
+    else if (problems.length === 2) score = 78;
+    else if (problems.length === 3) score = 72;
+    else if (problems.length >= 4) score = 65;
+
+    const suggestions: Suggestion[] = [];
+
+    if (problems.length > 0) {
+      suggestions.push({
         type: "internal-library",
         description:
           "社内ライブラリ照合：" +
-          issues.length +
-          "件の指摘あり。社内定義との不一致を確認・修正してください。",
+          problems.length +
+          "件の不一致あり。社内定義との食い違いを確認・修正してください。",
         implementation:
           "ファクトチェッカーの全文レポートを参照し、該当箇所の表現を社内定義に合わせて修正する。",
-        priority: issues.length >= 3 ? "high" : "medium",
-      },
-    ];
+        priority: problems.length >= 3 ? "high" : "medium",
+      });
+    }
+
+    // 確認できなかった項目をリスト化（Dify側ライブラリ追加の手がかり）
+    if (unconfirmed.length > 0) {
+      const list = unconfirmed.map((f) => "・" + f.label).join("\n");
+      suggestions.push({
+        type: "internal-library-unconfirmed",
+        description:
+          "ナレッジベースで確認できなかった項目が" +
+          unconfirmed.length +
+          "件あります（減点対象外）。Dify側の社内ライブラリへの追加をご検討ください。",
+        implementation: "【ライブラリ未登録の可能性がある項目】\n" + list,
+        priority: "low",
+      });
+    }
+
+    if (problems.length === 0) {
+      suggestions.push({
+        type: "internal-library",
+        description:
+          "社内ライブラリ照合：社内定義との不一致はありませんでした。",
+        implementation:
+          unconfirmed.length > 0
+            ? "上記の未確認項目をライブラリに追加すると、次回以降の照合精度が上がります。"
+            : "現状の表現を維持してください。",
+        priority: "low",
+      });
+    }
 
     return {
       score: score,
@@ -219,43 +282,137 @@ export class InternalLibraryFactCheckAgent extends BaseProofreadingAgent {
     };
   }
 
-  private splitBlocks(text: string): string[] {
-    // 「■」または「【〜】」で始まるブロックに分割
-    // どちらの記号もない場合は全文を1ブロックとして扱う
+  /**
+   * fact_check_result を判定（finding）単位に分解する。
+   * 「[判定]」「✅」「⚠️」「❌」等のマーカー行を1判定の起点とし、
+   * 続く根拠行（→ 〜）をその判定に束ねる。「■」は文脈見出し、
+   * 「【〜】」総括ブロックは個別判定の要約のためスコア対象外として読み飛ばす。
+   */
+  private extractFindings(text: string): Array<{
+    heading: string;
+    label: string;
+    detail: string;
+    text: string;
+    kind: "problem" | "unconfirmed" | "positive";
+  }> {
     const lines = text.split(/\r?\n/);
-    const blocks: string[] = [];
-    let current: string[] = [];
 
-    const isHeaderLine = (line: string): boolean => {
-      const trimmed = line.trim();
-      return /^■/.test(trimmed) || /^【.+】/.test(trimmed);
+    const isSectionHeading = (line: string): boolean => /^■/.test(line.trim());
+    const isSummaryHeading = (line: string): boolean =>
+      /^【.+】/.test(line.trim());
+    const markerRe = /^(\[判定\]|✅|⚠️|❌|🔴|✕|×)/;
+    const isMarker = (line: string): boolean => markerRe.test(line.trim());
+
+    const findings: Array<{
+      heading: string;
+      label: string;
+      detail: string;
+      text: string;
+      kind: "problem" | "unconfirmed" | "positive";
+    }> = [];
+
+    let currentHeading = "";
+    let inSummary = false;
+    let cur: { heading: string; first: string; lines: string[] } | null = null;
+
+    const flush = (): void => {
+      if (cur === null) return;
+      const c = cur;
+      cur = null;
+      const block = c.lines.join("\n").trim();
+      if (block.length === 0) return;
+      const kind = this.classifyFinding(block);
+      // positive（一致・問題なし）は減点もリスト化もしないため捨てる
+      if (kind === "positive") return;
+      // 「用語の確認」セクションの未確認は一般的な業界用語が多くノイズになるため除外する。
+      // （不一致＝problem は万一あれば実害があるため残す）
+      if (kind === "unconfirmed" && /用語/.test(c.heading)) return;
+      const label = this.extractLabel(c.first);
+      const detail = c.lines.slice(1).join(" ").replace(/\s+/g, " ").trim();
+      findings.push({
+        heading: c.heading,
+        label: label,
+        detail: detail,
+        text: block,
+        kind: kind,
+      });
     };
 
     lines.forEach((line) => {
-      if (isHeaderLine(line) && current.length > 0) {
-        blocks.push(current.join("\n").trim());
-        current = [line];
-      } else {
-        current.push(line);
+      if (isSectionHeading(line)) {
+        flush();
+        currentHeading = line.trim().replace(/^■\s*/, "");
+        inSummary = false;
+        return;
       }
+      if (isSummaryHeading(line)) {
+        // 【総合評価】【ファクトチェック結果】等：以降の本文はスコア対象外
+        flush();
+        inSummary = true;
+        return;
+      }
+      if (inSummary) return;
+      if (isMarker(line)) {
+        flush();
+        cur = { heading: currentHeading, first: line.trim(), lines: [line] };
+        return;
+      }
+      if (cur !== null) cur.lines.push(line);
+      // マーカー前の見出し直下テキストは文脈とみなし無視する
     });
-    if (current.length > 0) {
-      const joined = current.join("\n").trim();
-      if (joined.length > 0) blocks.push(joined);
-    }
+    flush();
 
-    if (blocks.length === 0) blocks.push(text.trim());
-    return blocks.filter((b) => b.length > 0);
+    return findings;
   }
 
-  private extractTitle(block: string): string {
-    const firstLine = block.split(/\r?\n/)[0] || "";
-    const trimmed = firstLine.trim();
-    // 「■ タイトル」「【タイトル】」を抽出
-    const m1 = /^■\s*(.+)$/.exec(trimmed);
-    if (m1 && m1[1]) return m1[1].trim();
-    const m2 = /^【(.+)】/.exec(trimmed);
-    if (m2 && m2[1]) return m2[1].trim();
-    return trimmed.substring(0, 40);
+  // 判定ブロックを problem / unconfirmed / positive に分類する。
+  // 優先度: problem > unconfirmed > positive。判別不能は安全側で unconfirmed（減点なし・リスト化）。
+  private classifyFinding(
+    block: string
+  ): "problem" | "unconfirmed" | "positive" {
+    // ① 不一致・矛盾（明確な誤り）→ problem（減点対象）
+    if (
+      /❌|✕|×|不正確|不一致|矛盾|誤り|虚偽|逸脱|事実と異なる|要修正/.test(block)
+    ) {
+      return "problem";
+    }
+
+    const hasCheck = /✅/.test(block); // 明示的なOKマーカー
+    const hasWarn = /⚠️/.test(block); // 明示的な注意マーカー
+
+    // ② 確認できない・ナレッジに情報が無い（誤りではない）→ unconfirmed（減点しない・リスト化）
+    //    「確認が必要」「情報が含まれていない」「定義が示されていない」等も含む。
+    //    ただし ✅ が付いた肯定判定は対象外（✅ を優先）。
+    const unconfirmedText =
+      /確認が必要|確認できない|確認できません|確認不能|情報が(ない|ありません|不足|不十分|含まれていない)|具体的な[^。]*(ない|示されていない|含まれていない)|示されていない|該当する記載が(ない|ありません)|記載が(ない|ありません)|登録されていない|存在しません|見当たらない|不明確/.test(
+        block
+      );
+    if (hasWarn || (unconfirmedText && !hasCheck)) {
+      return "unconfirmed";
+    }
+
+    // ③ 一致・問題なし → positive（無視）
+    if (
+      hasCheck ||
+      /一致|合致|問題なし|問題はありません|整合|認識されている|存在する|存在します|正確です/.test(
+        block
+      )
+    ) {
+      return "positive";
+    }
+
+    // ④ 判別不能：安全側で unconfirmed（黙って捨てない）
+    return "unconfirmed";
+  }
+
+  // 判定行の先頭マーカーを除き、対象（「」内の主張 or 見出し語）を抜き出す
+  private extractLabel(line: string): string {
+    let s = line.trim().replace(/^(\[判定\]|✅|⚠️|❌|🔴|✕|×)\s*/, "");
+    const quoted = /「([^」]+)」/.exec(s);
+    if (quoted && quoted[1]) return quoted[1].trim();
+    // 「→」「:」「：」以降は根拠なので落とす
+    const sepIdx = s.search(/[→:：]/);
+    if (sepIdx > 0) s = s.substring(0, sepIdx);
+    return s.trim().substring(0, 60);
   }
 }

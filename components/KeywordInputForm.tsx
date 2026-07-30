@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { SearchIcon } from "./icons";
 import { SpreadsheetModeToggle } from "./SpreadsheetModeToggle";
 import { SpreadsheetDataViewer } from "./SpreadsheetDataViewer";
@@ -25,6 +25,7 @@ interface KeywordInputFormProps {
     keyword: string;
     autoMode?: boolean;
   }) => void; // 画像生成エージェントをiframeで開く
+  initialKeyword?: string; // 他タブ（キーワード選定）から引き継いだ初期キーワード
 }
 
 const KeywordInputForm: React.FC<KeywordInputFormProps> = ({
@@ -39,6 +40,7 @@ const KeywordInputForm: React.FC<KeywordInputFormProps> = ({
     import.meta.env.VITE_BACKEND_URL ||
     "http://localhost:3003",
   onOpenImageAgent,
+  initialKeyword,
 }) => {
   // デバッグ用ログ
   console.log("🔍 KeywordInputForm Debug:");
@@ -46,8 +48,15 @@ const KeywordInputForm: React.FC<KeywordInputFormProps> = ({
   console.log("  apiBaseUrl prop:", apiBaseUrl);
   console.log("  Final apiBaseUrl:", apiBaseUrl);
 
-  const [keyword, setKeyword] = useState("");
+  const [keyword, setKeyword] = useState(initialKeyword ? initialKeyword : "");
   const [includeImages, setIncludeImages] = useState(true);
+
+  // キーワード選定タブから引き継がれた値で入力欄を更新する
+  useEffect(() => {
+    if (initialKeyword) {
+      setKeyword(initialKeyword);
+    }
+  }, [initialKeyword]);
   const [isFullAutoMode, setIsFullAutoMode] = useState(false); // フル自動モードの状態
   const [isSpreadsheetMode, setIsSpreadsheetMode] = useState(false); // スプレッドシートモード
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
@@ -150,7 +159,7 @@ const KeywordInputForm: React.FC<KeywordInputFormProps> = ({
             <ol className="mt-2 text-xs text-gray-600 space-y-1 list-decimal list-inside">
               <li>競合サイト分析（15サイト）</li>
               <li>構成案生成（Ver.2）＋ 構成チェック</li>
-              <li>記事執筆（Ver.3 Gemini Pro + Grounding）</li>
+              <li>記事執筆（Ver.3 Claude 執筆）</li>
               <li>最終校閲（マルチエージェント10個）</li>
             </ol>
             <p className="mt-2 text-xs text-amber-600">

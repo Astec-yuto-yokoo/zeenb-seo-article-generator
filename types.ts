@@ -141,3 +141,52 @@ export interface GroundingChunk {
     title: string;
   };
 }
+
+// ===== 戦略的キーワードリスト =====
+
+// 検索意図タイプ
+export type KeywordIntent =
+  | 'インフォメーショナル' // 情報収集（KNOW）
+  | 'コマーシャル'         // 比較検討（COMMERCIAL）
+  | 'トランザクショナル'   // 取引・行動（DO）
+  | 'ナビゲーショナル';    // 指名（NAV）
+
+// 戦略的キーワード1件
+export interface StrategicKeyword {
+  keyword: string;            // キーワード（複合語・ロングテール可）
+  intent: KeywordIntent | string; // 検索意図
+  priority: '高' | '中' | '低';   // 優先度
+  reason: string;             // 推奨理由（80字以内）
+  suggestedH2: string;        // 想定H2・記事テーマ案（1行）
+}
+
+// 3観点の戦略的キーワードリスト全体
+export interface StrategicKeywordList {
+  keyword: string;            // 起点となったメインキーワード
+  generatedAt: string;        // 生成日時（ISO文字列）
+  competitorKeywords: StrategicKeyword[]; // 観点1: 競合キーワード調査
+  ownKeywords: StrategicKeyword[];        // 観点2: 自社キーワード分析
+  marketKeywords: StrategicKeyword[];     // 観点3: 市場環境
+  sources?: GroundingChunk[]; // グラウンディング出典
+}
+
+// ===== 時事ネタ（ニュースジャッキング）キーワード =====
+
+// 時事ネタ起点のキーワード1件
+export interface TrendKeyword {
+  newsSummary: string;        // 拾った時事ニュース・話題（いつ頃の何の話題か）
+  keyword: string;            // そのニュースから狙う検索キーワード
+  intent: KeywordIntent | string; // 検索意図
+  priority: '高' | '中' | '低';   // 優先度
+  relevance: string;          // 自ドメイン（外壁塗装）との結びつき（なぜ今アクセスが取れるか）
+  suggestedH2: string;        // 想定H2・記事テーマ案
+  sourceTitle?: string;       // 根拠ニュースのタイトル
+  sourceUrl?: string;         // 根拠ニュースのURL
+}
+
+// 時事ネタキーワードのリスト全体
+export interface TrendKeywordList {
+  generatedAt: string;        // 生成日時（ISO文字列）
+  keywords: TrendKeyword[];
+  sources?: GroundingChunk[]; // グラウンディング出典
+}

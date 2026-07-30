@@ -4,6 +4,8 @@ import type {
   SeoOutlineV2,
   GroundingChunk,
   CompetitorResearchResult,
+  StrategicKeywordList,
+  TrendKeywordList,
 } from "./types";
 import { generateSeoOutline } from "./services/geminiServiceUpdated";
 import { generateCompetitorResearch } from "./services/competitorResearchWithWebFetch";
@@ -20,6 +22,12 @@ import ArticleDisplay from "./components/ArticleDisplay";
 import ArticleWriter from "./components/ArticleWriter";
 import { CompetitorResearchWebFetch } from "./components/CompetitorResearchWebFetch";
 import { FrequencyWordsTab } from "./components/FrequencyWordsTab";
+import { StrategicKeywordTab } from "./components/StrategicKeywordTab";
+import { TrendKeywordSection } from "./components/TrendKeywordSection";
+import {
+  generateStrategicKeywords,
+  generateTrendKeywords,
+} from "./services/strategicKeywordService";
 import LoadingSpinner from "./components/LoadingSpinner";
 import ErrorMessage from "./components/ErrorMessage";
 import { LogoIcon, SparklesIcon } from "./components/icons";
@@ -54,6 +62,67 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
     "research" | "frequency" | "outline" | "article" | "references"
   >("research");
+
+  // デフォルト画面の上位タブ（原稿作成 / キーワード選定）
+  const [mainMode, setMainMode] = useState<"article" | "keyword">("article");
+  // キーワード選定タブから原稿作成へ引き継ぐキーワード
+  const [articleSeedKeyword, setArticleSeedKeyword] = useState<string>("");
+
+  // 候補KWを原稿作成タブに引き継ぐ
+  const handleUseKeywordForArticle = useCallback((kw: string) => {
+    setArticleSeedKeyword(kw);
+    setKeyword(kw);
+    setMainMode("article");
+  }, []);
+
+  // 戦略的キーワードリスト
+  const [strategicKeywords, setStrategicKeywords] =
+    useState<StrategicKeywordList | null>(null);
+  const [isGeneratingStrategicKeywords, setIsGeneratingStrategicKeywords] =
+    useState<boolean>(false);
+
+  // 時事ネタ（ニュースジャッキング）キーワード
+  const [trendKeywords, setTrendKeywords] = useState<TrendKeywordList | null>(
+    null
+  );
+  const [isGeneratingTrendKeywords, setIsGeneratingTrendKeywords] =
+    useState<boolean>(false);
+
+  const handleGenerateTrendKeywords = useCallback(async () => {
+    setIsGeneratingTrendKeywords(true);
+    setError(null);
+    try {
+      const result = await generateTrendKeywords({ useGrounding: true });
+      setTrendKeywords(result);
+    } catch (err: any) {
+      const message = err && err.message ? err.message : String(err);
+      setError(message);
+    } finally {
+      setIsGeneratingTrendKeywords(false);
+    }
+  }, []);
+
+  const handleGenerateStrategicKeywords = useCallback(async () => {
+    if (!keyword) {
+      setError("キーワードが未設定です");
+      return;
+    }
+    setIsGeneratingStrategicKeywords(true);
+    setError(null);
+    try {
+      const result = await generateStrategicKeywords(
+        keyword,
+        competitorResearch,
+        { useGrounding: true }
+      );
+      setStrategicKeywords(result);
+    } catch (err: any) {
+      const message = err && err.message ? err.message : String(err);
+      setError(message);
+    } finally {
+      setIsGeneratingStrategicKeywords(false);
+    }
+  }, [keyword, competitorResearch]);
 
   // 参考資料の選択状態
   const [selectedRefMaterialIds, setSelectedRefMaterialIds] = useState<string[]>([]);
@@ -1438,6 +1507,72 @@ const App: React.FC = () => {
 
       <main className="w-full max-w-5xl flex-grow">
         <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 border border-gray-200">
+          {/* 上位タブ: 原稿作成 / キーワード選定 */}
+          <div className="flex gap-2 mb-6">
+            <button
+              onClick={() => setMainMode("article")}
+              className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
+                mainMode === "article"
+                  ? "bg-blue-500 text-white shadow-md"
+                  : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
+              }`}
+            >
+              原稿作成
+            </button>
+            <button
+              onClick={() => setMainMode("keyword")}
+              className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
+                mainMode === "keyword"
+                  ? "bg-emerald-500 text-white shadow-md"
+                  : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
+              }`}
+            >
+              キーワード選定
+            </button>
+          </div>
+
+          {mainMode === "keyword" && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  テーマ（軸キーワード）
+                </label>
+                <input
+                  type="text"
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !isGeneratingStrategicKeywords) {
+                      handleGenerateStrategicKeywords();
+                    }
+                  }}
+                  placeholder="例: 外壁塗装 色選び（記事にしたい大まかな領域を入力）"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 outline-none"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  記事にしたい大まかなテーマ（軸となる語）を1つ入力してください。競合・自社・市場環境の3観点で、狙うべき具体的なキーワード候補を提案します。競合調査を先に実行済みの場合はその結果も根拠に反映されます。
+                </p>
+              </div>
+              <StrategicKeywordTab
+                keyword={keyword}
+                strategicKeywords={strategicKeywords}
+                isGenerating={isGeneratingStrategicKeywords}
+                onGenerate={handleGenerateStrategicKeywords}
+                onUseKeyword={handleUseKeywordForArticle}
+              />
+
+              {/* 時事ネタ（ニュースジャッキング）セクション */}
+              <TrendKeywordSection
+                trendKeywords={trendKeywords}
+                isGenerating={isGeneratingTrendKeywords}
+                onGenerate={handleGenerateTrendKeywords}
+                onUseKeyword={handleUseKeywordForArticle}
+              />
+            </div>
+          )}
+
+          {mainMode === "article" && (
+          <>
           <KeywordInputForm
             onGenerate={handleGenerate}
             onGenerateV2={handleGenerateV2}
@@ -1447,6 +1582,7 @@ const App: React.FC = () => {
             apiUsageToday={getApiUsageToday()}
             apiUsageWarning={apiUsageWarning}
             onOpenImageAgent={openImageAgentInIframe}
+            initialKeyword={articleSeedKeyword}
           />
 
           <div className="mt-8">
@@ -1750,6 +1886,7 @@ const App: React.FC = () => {
                   }
                 }}
                 onOpenImageAgent={openImageAgentInIframe}
+                onArticleUpdate={setGeneratedArticle}
               />
             )}
 
@@ -1775,6 +1912,8 @@ const App: React.FC = () => {
             )}
 
           </div>
+          </>
+          )}
         </div>
       </main>
       <footer className="w-full max-w-5xl mt-8 text-center text-gray-500 text-sm">

@@ -1,7 +1,7 @@
-import { GoogleGenAI } from "@google/genai";
+import { createProxiedGenAI } from "./geminiClient";
 
-const API_KEY = process.env.API_KEY;
-const ai = new GoogleGenAI({ apiKey: API_KEY! });
+// プロキシ化：実キーはブラウザに焼き込まない（サーバー /api/gemini-proxy が保持）
+const ai = createProxiedGenAI();
 
 // 画像の視覚的特徴を分析
 export interface ImageFeatures {

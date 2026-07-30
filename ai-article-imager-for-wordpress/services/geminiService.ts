@@ -1,4 +1,5 @@
 import { GoogleGenAI, Modality } from "@google/genai";
+import { createProxiedGenAI } from "./geminiClient";
 
 // エクスポネンシャルバックオフ用のヘルパー関数
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -33,25 +34,12 @@ async function retryWithExponentialBackoff<T>(
   throw new Error("Max retries exceeded");
 }
 
-// 複数のAPIキーをサポート
-const API_KEYS = [
-  process.env.API_KEY,
-  process.env.API_KEY_2,
-  process.env.API_KEY_3,
-].filter(Boolean); // 存在するキーのみ使用
+// プロキシ化：実APIキーはブラウザに焼き込まない。サーバー（/api/gemini-proxy）が実キーを保持し
+// x-goog-api-key を注入する。実キーを持たないため並列処理は単一プロキシクライアントで行う
+// （従来も実際に有効なキーは1つのみ＝挙動は変わらない）。
+const aiClients = [createProxiedGenAI()];
 
-if (API_KEYS.length === 0) {
-  throw new Error(
-    "At least one API_KEY environment variable must be set (API_KEY, API_KEY_2, or API_KEY_3)."
-  );
-}
-
-console.log(`✅ ${API_KEYS.length}個のAPIキーが設定されています`);
-
-// 各APIキー用のクライアントを作成
-const aiClients = API_KEYS.map(
-  (apiKey) => new GoogleGenAI({ apiKey: apiKey! })
-);
+console.log(`✅ Geminiプロキシ経由でクライアントを初期化しました（実キーはサーバー側のみ）`);
 
 function dataUrlToBlob(dataUrl: string): { data: string; mimeType: string } {
   const parts = dataUrl.split(",");
@@ -466,19 +454,19 @@ CONSTRUCTION & PAINTING SITE SAFETY RULES (Astec Safety & Compliance Guide):
 === SCAFFOLDING (足場) ===
 1. TYPE: Use "kusabi (vike) scaffolding" — interlocking wedge-type scaffolding commonly used in Japanese residential renovation. For buildings wider than 1m work area, use "hon-ashiba" (double-row scaffolding) with two rows of vertical posts for maximum stability.
 2. COVERAGE: Scaffolding MUST fully enclose the entire building facade from ground level to at least 1 meter ABOVE the eaves/roofline. No partial scaffolding — every wall face being worked on must be fully covered.
-3. SAFETY FEATURES: Handrails at 85cm or higher on all working platforms, plus mid-rails. Toe boards at least 10cm high at the base of each platform. Diagonal cross-bracing between vertical posts.
-4. WORK PLATFORM: Clean and clear — no paint cans, tools, or materials left on the scaffolding floor.
+3. SAFETY FEATURES (労働安全衛生規則 compliant, whenever a platform is visible): the OUTER edge has TWO horizontal scaffold pipes — a top handrail at 85–95cm AND a mid-rail (中桟) at 35–50cm — plus a toe board (幅木) at the base and diagonal cross-bracing between vertical posts. NEVER show a platform with an open outer edge or only one rail.
+4. WORK PLATFORM: NARROW foot boards (踏板) about 40cm wide, not a wide deck; the gap between the boards and the building wall is SMALL, about 10cm (≤12cm). Clean and clear — no paint cans, tools, or materials left on the scaffolding floor.
 
 === SPLASH PREVENTION SHEETS (飛散防止シート) ===
 5. For ANY pressure washing or painting scene, the ENTIRE scaffolding must be wrapped in gray or white mesh splash-prevention sheets.
-6. Sheet requirements: All grommet ties securely fastened with NO gaps between sheets. Sheets extend from nearly ground level up to at least 1 meter above the eaves. No loose or flapping sections.
+6. Sheet requirements: The mesh sheet MUST be securely TIED/LACED to the scaffold pipes with binding ropes/bands (緊結ロープ・結束バンド) at EVERY grommet (ハトメ) and along every edge, spaced at regular intervals (roughly every 30–50cm). Each visible tie is knotted to a scaffold pipe; NO gaps between sheets, and NEVER show loose, untied, dangling, or flapping ropes or detached sheet edges. Sheets extend from nearly ground level up to at least 1 meter above the eaves and stay taut.
 7. For airless spray painting, use DOUBLE-LAYER sheets.
 
 === HARNESS & FALL PROTECTION (フルハーネス型墜落制止用器具) ===
 8. Workers at ANY height on scaffolding MUST wear a full-body harness — NOT an old-style waist belt.
 9. Full-body harness anatomy (front view, top to bottom): shoulder straps running over both shoulders, a detachable connector strap joining the shoulder straps at upper chest, a chest strap/buckle across the mid-chest, a waist belt around the torso, and leg/thigh straps looping around each thigh with a pelvic belt connecting them at the lower back.
-10. Full-body harness anatomy (rear view): a single D-ring mounted at the center of the upper back between the shoulder blades. A lanyard connects from this D-ring, incorporating a shock absorber midway, and terminates in a carabiner hook that attaches to an anchor point on the scaffolding ABOVE the worker.
-11. All harness straps must appear taut and fitted — not loose or baggy. The lanyard must be visibly routed from the back D-ring upward to an overhead anchor.
+10. Full-body harness anatomy (rear view): a single D-ring mounted at the center of the upper back between the shoulder blades. A lanyard connects from this D-ring, incorporating a shock absorber midway, and terminates in a carabiner hook that attaches to an overhead anchor point on the scaffolding ABOVE the worker (as high as possible to minimize fall distance).
+11. All harness straps must appear taut and fitted — not loose or baggy. The lanyard starts at the dorsal D-ring on the BACK (center upper-back, between the shoulder blades) and is routed UP to an overhead anchor. NEVER attach the lanyard to the shoulder, chest, or arm, never hook it at waist level, and never show its end unhooked or hanging free.
 
 === WORKER ATTIRE ===
 12. HELMET: SG-rated safety helmet with chin strap securely fastened.
@@ -493,7 +481,11 @@ NEGATIVE PROMPT (NEVER generate these):
 - Scaffolding that covers only part of the building or stops below the roofline
 - Workers without full-body harness on scaffolding
 - Waist-only safety belts (outdated and prohibited)
-- Harness lanyards hanging loose or not connected overhead
+- Harness lanyards hanging loose, hooked at waist level, or not connected to an overhead anchor
+- Lanyard/rope attached to the shoulder, chest, or arm instead of the back D-ring
+- A scaffold platform with only one rail or a completely open outer edge (needs top rail 85cm+ AND mid-rail 35–50cm)
+- A wide gap between the foot board and the building wall (should be about 10cm)
+- Splash-prevention sheets with loose, untied, or dangling ropes, or edges not bound to the scaffold
 - Workers with bare arms, rolled-up sleeves, or short sleeves
 - Paint cans or tools scattered on scaffolding platforms
 - Pedestrians walking under scaffolding without barriers
@@ -655,7 +647,7 @@ export interface ImageGenerationResult {
 export const generateImagesInParallel = async (
   tasks: ImageGenerationTask[]
 ): Promise<ImageGenerationResult[]> => {
-  const apiKeyCount = API_KEYS.length;
+  const apiKeyCount = aiClients.length;
 
   console.log(
     `🚀 並列画像生成開始: ${tasks.length}個のタスクを${apiKeyCount}個のAPIキーで処理`

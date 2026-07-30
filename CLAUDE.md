@@ -26,7 +26,9 @@ curl http://localhost:3003/api/health
 |----------|------|
 | フロントエンド | React 19, Vite 6, TypeScript, Tailwind CSS |
 | バックエンド | Node.js, Express 4 |
-| AI（構成・執筆・修正） | Gemini 2.5 Pro（`@google/generative-ai`） |
+| AI（競合分析・本文修正） | Gemini 2.5 Pro / 2.5 Flash（`@google/generative-ai`） |
+| AI（構成案生成） | Claude Sonnet 4.6（`@anthropic-ai/sdk`、`VITE_CLAUDE_OUTLINE_MODEL`で切替可） |
+| AI（執筆） | Claude（既定Opus 4.8 / `.env`でSonnet 4.6に切替中、`VITE_CLAUDE_WRITING_MODEL`） |
 | AI（最終校閲） | GPT-5 / gpt-5-mini / gpt-5-nano（OpenAI Responses API） |
 | AI（MoA相互検証） | Claude（`@anthropic-ai/sdk`） |
 | スクレイピング | Puppeteer（開発）/ puppeteer-core + @sparticuz/chromium（本番） |
@@ -117,11 +119,11 @@ const response = await (openai as any).responses.create({
 ## 環境変数
 
 ```
-GEMINI_API_KEY / VITE_GEMINI_API_KEY   # Gemini API（必須）
-GOOGLE_API_KEY / VITE_GOOGLE_API_KEY   # Custom Search API（必須）
+GEMINI_API_KEY                         # Gemini API（必須）。サーバー側のみ。VITE_版は廃止（下記セキュリティ参照）
+GOOGLE_API_KEY                         # Custom Search / Drive API（必須）。サーバー側のみ。VITE_版は廃止
 GOOGLE_SEARCH_ENGINE_ID / VITE_GOOGLE_SEARCH_ENGINE_ID  # カスタム検索エンジンID（必須）
 OPENAI_API_KEY                         # GPT-5最終校閲用
-ANTHROPIC_API_KEY                      # Claude MoA相互検証用
+ANTHROPIC_API_KEY / VITE_ANTHROPIC_API_KEY  # Claude（執筆=Opus 4.8 / MoA相互検証）用。執筆はブラウザ実行のためVITE_版が必須
 INTERNAL_API_KEY / VITE_INTERNAL_API_KEY
 COMPANY_DATA_FOLDER_ID                 # Google DriveフォルダID
 WP_BASE_URL / WP_USERNAME / WP_APP_PASSWORD  # WordPress連携
@@ -136,7 +138,25 @@ DIFY_FACTCHECK_API_KEY                 # 社内ライブラリ・ファクトチ
 DIFY_FACTCHECK_ENDPOINT                # 任意。未設定時は https://api.dify.ai/v1/workflows/run
 ```
 
-`VITE_` プレフィックスのある変数のみブラウザ側で参照可能。
+`VITE_` プレフィックスのある変数のみブラウザ側で参照可能。**＝ `VITE_` を付けた秘密鍵はビルド時にJSバンドルへ平文で焼き込まれ、誰でも閲覧できる。** APIキー類に `VITE_` を付けてはならない。
+
+## Gemini APIキーのサーバー側化（絶対厳守）
+
+Gemini APIキーをブラウザに露出させない。実キーは**サーバー(`/api/gemini-proxy`)側のみ**が保持する。
+
+- **経路**: フロントの `@google/generative-ai` SDK は `vite.config.ts` の `resolve.alias`（`/^@google\/generative-ai$/` → `services/geminiSdkShim.ts`）で差し替えられ、全リクエストが `baseUrl: /api/gemini-proxy` 経由になる
+- **シム**: `services/geminiSdkShim.ts` が `GoogleGenerativeAI` を継承し、ダミーキーで生成＋`getGenerativeModel` に `baseUrl` と `x-api-key`（内部認証）を注入。実体SDKは `../node_modules/@google/generative-ai/dist/index.mjs` を相対パス参照（alias無限ループ回避・exports制約回避）
+- **サーバー**: `server/scraping-server.js` の `app.use("/api/gemini-proxy", authenticate, ...)` が `x-goog-api-key: process.env.GEMINI_API_KEY` を注入して Google へ転送。`authenticate` 適用・グローバル `apiLimiter` より前に登録（1記事で多数のGemini呼び出しが正当に発生するためレート制限対象外）。生成呼び出しタイムアウト180秒を付与
+- **vite.config.ts**: `define` には実キーを入れず、ダミー文字列 `GEMINI_CLIENT_PLACEHOLDER`（30字以上・"PLACEHOLDER"非含有）を `process.env.GEMINI_API_KEY` / `process.env.API_KEY` に注入。各サービスの起動時ガードを通し、`process.env.*` 参照のReferenceErrorを防ぐため。**この仕組み（alias/シム/プロキシ/ダミー注入）を削除・無効化してはならない**
+- **`.env` に `VITE_GEMINI_API_KEY` / `VITE_GOOGLE_API_KEY` を復活させてはならない**（Viteが自動でバンドルへ焼き込むため）
+- 3プロジェクト共通反映対象（apaman / zeenb / factory）
+- **画像生成エージェント（`ai-article-imager-for-wordpress`）もプロキシ化済み**（本体とは別SDK `@google/genai` を使用）:
+  - **シム**: `services/geminiClient.ts` の `createProxiedGenAI()` が `GoogleGenAI` を `httpOptions.baseUrl = <VITE_API_URL>/gemini-proxy`（例: `http://localhost:3003/api/gemini-proxy`）＋ `headers: { "x-api-key": 内部キー }` で生成。ダミーキー `server-proxied-gemini-no-client-key` を渡し、実キーは持たせない。genai は URL を `{baseUrl}/{apiVersion(=v1beta)}/{path}` で組むため既存 `/api/gemini-proxy`（マウント部を剥がして Google へ転送）をそのまま流用できる
+  - **利用側**: `services/geminiService.ts` の `aiClients = [createProxiedGenAI()]`（実質シングルキー運用で従来挙動を維持）、`services/imageAnalyzer.ts` の `ai = createProxiedGenAI()`、`utils/filenameBasedMatcher.ts` も同様。**`new GoogleGenAI({ apiKey })` を直接生成してはならない**
+  - **vite.config.ts**: `define` の `process.env.API_KEY` / `process.env.GEMINI_API_KEY` には実キーを入れず、ダミー文字列（`gemini-image-agent-proxied-no-client-key`）のみ注入。**`env.GEMINI_API_KEY` を焼き込む旧記述に戻してはならない**
+  - CORS は各サーバーの `allowedOrigins` に画像エージェントのオリジン（5181 / 5177 / 5179）を登録済み。**この仕組みを削除・無効化してはならない**。3プロジェクト共通反映対象
+  - CORS の `allowedHeaders` に **`x-goog-api-key` / `x-goog-api-client` を含めること**（genai SDK が付与するため）。無いとブラウザのプリフライトで弾かれ画像生成が `Failed to fetch` になる。**これらを削除してはならない**
+- **未対応（別途要ローテーション）**: Anthropic・OpenAI・Serper の `VITE_` 版は依然ブラウザ露出。同様のサーバー側化が望ましい
 
 ## 見出し番号付与ルール（絶対厳守）
 
@@ -161,18 +181,18 @@ DIFY_FACTCHECK_ENDPOINT                # 任意。未設定時は https://api.di
 
 ## 記事文字数制御
 
-- **目標**: 5,000〜6,000文字（デフォルト5,500文字）
+- **目標**: 6,000〜8,000文字（デフォルト7,000文字、上限8,000文字でキャップ）
 - `writingAgentV3.ts` の `WritingRequest.targetCharCount` で制御
-- `ArticleWriter.tsx` で `characterCountAnalysis.average` を上限6,000でキャップして渡す
-- プロンプトで「±10%以内、超過禁止」と明示指示
-- `maxOutputTokens: 8192` でトークン上限も制限
+- `ArticleWriter.tsx` で `characterCountAnalysis.average` を上限8,000でキャップして渡す
+- プロンプトで「8,000文字を超えないこと」と明示指示
+- **執筆モデルは Claude Opus 4.8**（`messages.stream` でストリーミング受信）。`CLAUDE_WRITING_MAX_TOKENS = 24000` でトークン上限を制限
 - **1段落（`<p>`タグ）あたり最大140字**を厳守。超える場合は分割する
-- **注意**: `maxOutputTokens` や `length_control`、段落文字数上限のプロンプト文言を勝手に緩和しないこと
+- **注意**: `CLAUDE_WRITING_MAX_TOKENS` や `length_control`、段落文字数上限のプロンプト文言を勝手に緩和しないこと
 
 ## H2ブロック単位修正機能
 
 ### 構成案H2修正（構成生成後・執筆前）
-- `services/outlineGeneratorV2.ts` の `reviseOutlineSection()` — 対象H2セクションの構成をGemini 2.5 Proで修正
+- `services/outlineGeneratorV2.ts` の `reviseOutlineSection()` — 対象H2セクションの構成をClaude Sonnet 4.6で修正
 - `components/OutlineDisplayV2.tsx` — 各H2ブロック下にtextarea＋「AI修正」ボタン
 - `App.tsx` — `onOutlineUpdate` コールバックで構成案stateを更新
 
@@ -189,7 +209,7 @@ DIFY_FACTCHECK_ENDPOINT                # 任意。未設定時は https://api.di
   → 構成生成V2（outlineGeneratorV2 → outlineCheckerV2）
   → [任意] 構成案H2修正（reviseOutlineSection）
   → [自動] BOX画像取得（boxImageService → /api/box-images）
-  → 執筆（writingAgentV3: Gemini 2.5 Pro + Grounding、目標5000〜6000文字、BOX画像自動挿入）
+  → 執筆（writingAgentV3: Claude Opus 4.8 ストリーミング、目標6000〜8000文字、BOX画像自動挿入。事実確認は構成段階＋最終校閲に委譲）
   → 執筆チェック（writingCheckerV3）
   → [任意] 本文H2修正（reviseArticleH2Section）
   → 最終校閲マルチエージェント

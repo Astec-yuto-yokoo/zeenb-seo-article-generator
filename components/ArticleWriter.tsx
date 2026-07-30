@@ -199,6 +199,8 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
   const [useMultiAgent, setUseMultiAgent] = useState(true); // マルチエージェントモードのトグル（デフォルトON）
   const [multiAgentResult, setMultiAgentResult] =
     useState<IntegrationResult | null>(null);
+  // 社内ライブラリ照合の指摘だけに絞り込むフィルタ
+  const [showLibOnlyPanel, setShowLibOnlyPanel] = useState(false);
 
   // H2ブロック単位修正用state
   const [h2RevisionPrompts, setH2RevisionPrompts] = useState<Record<string, string>>({});
@@ -377,10 +379,10 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
     try {
       let generatedArticle;
 
-      // Ver.3モードの場合（Gemini Pro + Grounding）
+      // Ver.3モードの場合（Claude執筆）
       if (writingMode === "v3") {
         setGenerationProgress(
-          "Ver.3モード（Gemini Pro + Grounding）で記事を生成中..."
+          "Ver.3モード（Claude で執筆中）..."
         );
 
         // テスト構成(Ver.2)からの実行の場合、outlineがnullの可能性があるので確認
@@ -398,10 +400,10 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
         );
 
         // Ver.3エージェントで生成
-        // 目標文字数: characterCountAnalysis があればその値、なければ5500文字
+        // 目標文字数: characterCountAnalysis があればその値、なければ7000文字（目安6,000〜8,000・上限8,000）
         const targetChars = actualOutline.characterCountAnalysis
-          ? Math.min(actualOutline.characterCountAnalysis.average, 6000)
-          : 5500;
+          ? Math.min(actualOutline.characterCountAnalysis.average, 8000)
+          : 7000;
 
         // BOX画像アセットを取得（失敗しても記事生成は続行）
         setGenerationProgress("BOX画像素材を取得中...");
@@ -410,7 +412,7 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
           console.log(`🖼️ BOX画像 ${boxImages.length}件を取得`);
         }
 
-        setGenerationProgress("Ver.3モード（Gemini Pro + Grounding）で記事を生成中...");
+        setGenerationProgress("Ver.3モード（Claude で執筆中）...");
         const v3Result = await generateArticleV3({
           outline: outlineMarkdown,
           keyword: keyword,
@@ -2747,12 +2749,29 @@ ${
                     </div>
                   )}
 
-                  {/* スコア内訳 */}
-                  <div className="mb-4 p-3 bg-white rounded-lg border border-gray-200">
-                    <h4 className="text-sm font-semibold text-gray-600 mb-2">
+                  {/* 推奨アクション（最上部・一目で判定できるよう集約） */}
+                  <div
+                    className={`mb-4 p-2 rounded-lg text-center text-sm font-bold border ${
+                      multiAgentResult.recommendation === "publish"
+                        ? "bg-green-50 border-green-300 text-green-700"
+                        : multiAgentResult.recommendation === "revise"
+                        ? "bg-amber-50 border-amber-300 text-amber-700"
+                        : "bg-red-50 border-red-300 text-red-700"
+                    }`}
+                  >
+                    {multiAgentResult.recommendation === "publish"
+                      ? "✅ 公開可能"
+                      : multiAgentResult.recommendation === "revise"
+                      ? "⚠️ 修正推奨"
+                      : "🚫 大幅な修正が必要"}
+                  </div>
+
+                  {/* スコア内訳（デフォルト折りたたみ） */}
+                  <details className="mb-4 p-3 bg-white rounded-lg border border-gray-200">
+                    <summary className="text-sm font-semibold text-gray-600 cursor-pointer select-none">
                       スコア内訳
-                    </h4>
-                    <div className="space-y-1 text-xs">
+                    </summary>
+                    <div className="space-y-1 text-xs mt-2">
                       <div className="flex justify-between">
                         <span className="text-gray-500">ファクトチェック:</span>
                         <span className="text-gray-800">
@@ -2786,243 +2805,159 @@ ${
                         </span>
                       </div>
                     </div>
-                  </div>
+                  </details>
 
-                  {/* 重大な問題 */}
-                  {multiAgentResult.criticalIssues.length > 0 && (
-                    <div className="mb-4">
-                      <div className="flex justify-between items-center mb-2">
-                        <h4 className="text-sm font-semibold text-red-400 flex items-center gap-1">
-                          🔴 重大な問題 (
-                          {multiAgentResult.criticalIssues.length}件)
-                        </h4>
-                        <button
-                          onClick={() => handleBatchRevision("critical")}
-                          className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="重大な問題をすべて修正"
-                          disabled={isRevising}
-                        >
-                          🔨 一括修正
-                        </button>
-                      </div>
-                      <div className="space-y-2 max-h-60 overflow-y-auto">
-                        {multiAgentResult.criticalIssues.map((issue, idx) => {
-                          const issueId = `${issue.agentName}-${issue.description}`;
-                          const isRevised = revisedIssues.has(issueId);
-                          const isRevising = revisingIssueId === issueId;
-                          return (
-                            <div
-                              key={idx}
-                              className={`p-2 border rounded text-xs transition-all ${
-                                isRevised
-                                  ? "bg-green-900/20 border-green-800"
-                                  : isRevising
-                                  ? "bg-yellow-900/20 border-yellow-700 animate-pulse"
-                                  : "bg-red-900/20 border-red-800"
-                              }`}
-                            >
-                              <div className="flex justify-between items-start mb-1">
-                                <div
-                                  className={`font-semibold flex items-center gap-2 ${
-                                    isRevised
-                                      ? "text-green-300"
-                                      : isRevising
-                                      ? "text-yellow-300"
-                                      : "text-red-300"
-                                  }`}
-                                >
-                                  [{issue.agentName}]
-                                  {isRevised && (
-                                    <span className="text-green-400">
-                                      ✅ 修正済
-                                    </span>
-                                  )}
-                                  {isRevising && (
-                                    <span className="flex items-center gap-1 text-yellow-400">
-                                      <span className="inline-block w-3 h-3 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin"></span>
-                                      修正中...
-                                    </span>
-                                  )}
-                                </div>
-                                <button
-                                  onClick={() =>
-                                    handleSingleIssueRevision(issue)
-                                  }
-                                  className={`px-2 py-1 text-white text-xs rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                                    isRevised
-                                      ? "bg-gray-400 hover:bg-gray-500"
-                                      : "bg-red-500 hover:bg-red-600"
-                                  }`}
-                                  title={
-                                    isRevised
-                                      ? "修正済み"
-                                      : isRevising
-                                      ? "修正中..."
-                                      : revisingIssueId
-                                      ? "他の項目を修正中"
-                                      : "この問題を修正"
-                                  }
-                                  disabled={
-                                    isRevising || revisingIssueId !== null
-                                  }
-                                >
-                                  {isRevised
-                                    ? "✅ 済"
-                                    : isRevising
-                                    ? "⏳"
-                                    : "修正"}
-                                </button>
-                              </div>
-                              <div className="text-gray-600 mb-1">
-                                {issue.description}
-                              </div>
-                              {issue.location && (
-                                <div className="text-gray-500">
-                                  📍 {issue.location}
-                                </div>
-                              )}
-                              {issue.suggestion && (
-                                <div className="text-blue-500 mt-1">
-                                  💡 {issue.suggestion}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 主要な問題 */}
-                  {multiAgentResult.majorIssues.length > 0 && (
-                    <div className="mb-4">
-                      <div className="flex justify-between items-center mb-2">
-                        <h4 className="text-sm font-semibold text-yellow-400 flex items-center gap-1">
-                          🟡 主要な問題 ({multiAgentResult.majorIssues.length}
-                          件)
-                        </h4>
-                        <button
-                          onClick={() => handleBatchRevision("major")}
-                          className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white text-xs rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="主要な問題をすべて修正"
-                          disabled={isRevising}
-                        >
-                          🔨 一括修正
-                        </button>
-                      </div>
-                      <div className="space-y-2 max-h-60 overflow-y-auto">
-                        {multiAgentResult.majorIssues.map((issue, idx) => {
-                          const issueId = `${issue.agentName}-${issue.description}`;
-                          const isRevised = revisedIssues.has(issueId);
-                          return (
-                            <div
-                              key={idx}
-                              className={`p-2 border rounded text-xs ${
-                                isRevised
-                                  ? "bg-green-900/20 border-green-800"
-                                  : "bg-yellow-900/20 border-yellow-800"
-                              }`}
-                            >
-                              <div className="flex justify-between items-start mb-1">
-                                <div
-                                  className={`font-semibold ${
-                                    isRevised
-                                      ? "text-green-300"
-                                      : "text-yellow-300"
-                                  }`}
-                                >
-                                  [{issue.agentName}] {isRevised && "✅ 修正済"}
-                                </div>
-                                <button
-                                  onClick={() =>
-                                    handleSingleIssueRevision(issue)
-                                  }
-                                  className={`px-2 py-1 text-white text-xs rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                                    isRevised
-                                      ? "bg-gray-400 hover:bg-gray-500"
-                                      : "bg-amber-500 hover:bg-amber-600"
-                                  }`}
-                                  title={
-                                    isRevised
-                                      ? "修正済み"
-                                      : isRevising
-                                      ? "修正中..."
-                                      : revisingIssueId
-                                      ? "他の項目を修正中"
-                                      : "この問題を修正"
-                                  }
-                                  disabled={
-                                    isRevising || revisingIssueId !== null
-                                  }
-                                >
-                                  {isRevised
-                                    ? "✅ 済"
-                                    : isRevising
-                                    ? "⏳"
-                                    : "修正"}
-                                </button>
-                              </div>
-                              <div className="text-gray-600 mb-1">
-                                {issue.description}
-                              </div>
-                              {issue.location && (
-                                <div className="text-gray-500">
-                                  📍 {issue.location}
-                                </div>
-                              )}
-                              {issue.suggestion && (
-                                <div className="text-blue-500 mt-1">
-                                  💡 {issue.suggestion}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 改善提案（全部表示） */}
-                  {multiAgentResult.improvementPlan &&
-                    multiAgentResult.improvementPlan.length > 0 && (
+                  {/* 検出された問題（重大→主要→軽微を1リストに集約） */}
+                  {(() => {
+                    const allIssues = [
+                      ...multiAgentResult.criticalIssues,
+                      ...multiAgentResult.majorIssues,
+                      ...multiAgentResult.minorIssues,
+                    ];
+                    const isInternalLib = (i: { agentName?: string }) =>
+                      !!i &&
+                      typeof i.agentName === "string" &&
+                      i.agentName.indexOf("社内ライブラリ") !== -1;
+                    const internalLibCount = allIssues.filter(isInternalLib).length;
+                    const displayedIssues = showLibOnlyPanel
+                      ? allIssues.filter(isInternalLib)
+                      : allIssues;
+                    const SEV: Record<
+                      string,
+                      { icon: string; label: string; box: string; text: string; btn: string }
+                    > = {
+                      critical: { icon: "🔴", label: "重大", box: "bg-red-50 border-red-300", text: "text-red-700", btn: "bg-red-500 hover:bg-red-600" },
+                      major: { icon: "🟡", label: "主要", box: "bg-amber-50 border-amber-300", text: "text-amber-700", btn: "bg-amber-500 hover:bg-amber-600" },
+                      minor: { icon: "🔵", label: "情報", box: "bg-blue-50 border-blue-200", text: "text-blue-700", btn: "bg-blue-500 hover:bg-blue-600" },
+                      info: { icon: "🔵", label: "情報", box: "bg-blue-50 border-blue-200", text: "text-blue-700", btn: "bg-blue-500 hover:bg-blue-600" },
+                    };
+                    if (allIssues.length === 0) {
+                      return (
+                        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 text-center">
+                          🎉 指摘はありません
+                        </div>
+                      );
+                    }
+                    return (
                       <div className="mb-4">
-                        <h4 className="text-sm font-semibold text-blue-600 mb-2">
-                          改善提案 ({multiAgentResult.improvementPlan.length}
-                          件)
-                        </h4>
-                        <div className="space-y-2 max-h-60 overflow-y-auto">
-                          {multiAgentResult.improvementPlan.map((plan, idx) => (
-                            <div
-                              key={idx}
-                              className="p-2 bg-blue-50 border border-blue-200 rounded-lg text-xs"
-                            >
-                              <div className="text-gray-600">
-                                {idx + 1}. {plan}
+                        <div className="flex justify-between items-center mb-2">
+                          <h4 className="text-sm font-semibold text-gray-700">
+                            検出された問題（{displayedIssues.length}件）
+                          </h4>
+                          <div className="flex gap-1">
+                            {multiAgentResult.criticalIssues.length > 0 && (
+                              <button
+                                onClick={() => handleBatchRevision("critical")}
+                                disabled={isRevising}
+                                className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="重大な問題を一括修正"
+                              >
+                                🔨重大
+                              </button>
+                            )}
+                            {multiAgentResult.majorIssues.length > 0 && (
+                              <button
+                                onClick={() => handleBatchRevision("major")}
+                                disabled={isRevising}
+                                className="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="主要な問題を一括修正"
+                              >
+                                🔨主要
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <label className="flex items-center gap-1 text-xs text-gray-600 mb-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={showLibOnlyPanel}
+                            onChange={(e) => setShowLibOnlyPanel(e.target.checked)}
+                          />
+                          社内ライブラリ照合のみ（{internalLibCount}件）
+                        </label>
+                        {showLibOnlyPanel && displayedIssues.length === 0 && (
+                          <div className="p-2 text-xs text-gray-500 bg-white border border-gray-200 rounded">
+                            社内ライブラリ照合の指摘はありません。
+                          </div>
+                        )}
+                        <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+                          {displayedIssues.map((issue, idx) => {
+                            const sev = SEV[issue.severity] || SEV.minor;
+                            const issueId = `${issue.agentName}-${issue.description}`;
+                            const isRevised = revisedIssues.has(issueId);
+                            const isItemRevising = revisingIssueId === issueId;
+                            const isUnconfirmed =
+                              typeof issue.description === "string" &&
+                              issue.description.indexOf("【ライブラリ未確認】") === 0;
+                            return (
+                              <div
+                                key={idx}
+                                className={`p-2 border rounded text-xs transition-all ${
+                                  isRevised
+                                    ? "bg-green-50 border-green-300"
+                                    : isItemRevising
+                                    ? "bg-yellow-50 border-yellow-300 animate-pulse"
+                                    : sev.box
+                                }`}
+                              >
+                                <div className="flex justify-between items-start mb-1 gap-2">
+                                  <div
+                                    className={`font-semibold flex items-center gap-1 ${
+                                      isRevised ? "text-green-600" : sev.text
+                                    }`}
+                                  >
+                                    <span>{sev.icon}</span>
+                                    <span className="text-gray-500">
+                                      [{issue.agentName}]
+                                    </span>
+                                    {isRevised && (
+                                      <span className="text-green-600">✅済</span>
+                                    )}
+                                    {isItemRevising && (
+                                      <span className="text-yellow-600">⏳修正中</span>
+                                    )}
+                                  </div>
+                                  {!isUnconfirmed && (
+                                    <button
+                                      onClick={() => handleSingleIssueRevision(issue)}
+                                      disabled={isItemRevising || revisingIssueId !== null}
+                                      className={`shrink-0 px-2 py-1 text-white text-xs rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                                        isRevised
+                                          ? "bg-gray-400 hover:bg-gray-500"
+                                          : sev.btn
+                                      }`}
+                                      title={
+                                        isRevised
+                                          ? "修正済み"
+                                          : revisingIssueId
+                                          ? "他の項目を修正中"
+                                          : "この問題を修正"
+                                      }
+                                    >
+                                      {isRevised ? "✅済" : isItemRevising ? "⏳" : "修正"}
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="text-gray-600">
+                                  {issue.description}
+                                </div>
+                                {issue.location && (
+                                  <div className="text-gray-500 mt-0.5">
+                                    📍 {issue.location}
+                                  </div>
+                                )}
+                                {issue.suggestion && (
+                                  <div className="text-blue-500 mt-1">
+                                    💡 {issue.suggestion}
+                                  </div>
+                                )}
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
-                    )}
-
-                  {/* 推奨アクション */}
-                  <div className="mt-4 p-3 bg-white rounded-lg border border-gray-200">
-                    <div
-                      className={`text-sm font-semibold ${
-                        multiAgentResult.recommendation === "publish"
-                          ? "text-green-600"
-                          : multiAgentResult.recommendation === "revise"
-                          ? "text-amber-600"
-                          : "text-red-600"
-                      }`}
-                    >
-                      {multiAgentResult.recommendation === "publish"
-                        ? "公開可能"
-                        : multiAgentResult.recommendation === "revise"
-                        ? "修正推奨"
-                        : "大幅な修正が必要"}
-                    </div>
-                  </div>
+                    );
+                  })()}
                 </div>
               )}
             </>

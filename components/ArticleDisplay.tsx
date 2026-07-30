@@ -4,6 +4,8 @@ import { generateFaqSchemaFromArticle } from "../utils/faqSchemaGenerator";
 import { generateSlug } from "../services/slugGenerator";
 import { MultiAgentOrchestrator } from "../services/finalProofreadingAgents/MultiAgentOrchestrator";
 import type { IntegrationResult } from "../services/finalProofreadingAgents/types";
+import { reviseArticleWhole } from "../services/articleRevisionService";
+import { fixWordPressListBlocks, fixWordPressTableBlocks } from "../services/writingAgentV3";
 
 interface ArticleDisplayProps {
   article: {
@@ -21,6 +23,12 @@ interface ArticleDisplayProps {
     keyword: string;
     autoMode?: boolean;
   }) => void;
+  onArticleUpdate?: (article: {
+    title: string;
+    metaDescription: string;
+    htmlContent: string;
+    plainText: string;
+  }) => void;
 }
 
 const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
@@ -29,6 +37,7 @@ const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
   outline,
   onEditClick,
   onOpenImageAgent,
+  onArticleUpdate,
 }) => {
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview");
   const [copyButtonText, setCopyButtonText] = useState("HTMLコピー");
@@ -38,6 +47,60 @@ const ArticleDisplay: React.FC<ArticleDisplayProps> = ({
   const [proofStatus, setProofStatus] = useState<string>("");
   const [proofResult, setProofResult] = useState<IntegrationResult | null>(null);
   const [showProofResult, setShowProofResult] = useState<boolean>(false);
+  // 社内ライブラリ照合の指摘だけに絞り込むフィルタ
+  const [showInternalLibOnly, setShowInternalLibOnly] = useState<boolean>(false);
+
+  const allProofIssues = useMemo(function () {
+    if (!proofResult) return [];
+    return [
+      ...proofResult.criticalIssues,
+      ...proofResult.majorIssues,
+      ...proofResult.minorIssues,
+    ];
+  }, [proofResult]);
+
+  const isInternalLibIssue = function (i: { agentName?: string }) {
+    return !!i && typeof i.agentName === "string" && i.agentName.indexOf("社内ライブラリ") !== -1;
+  };
+  const internalLibCount = allProofIssues.filter(isInternalLibIssue).length;
+  const displayedIssues = showInternalLibOnly
+    ? allProofIssues.filter(isInternalLibIssue)
+    : allProofIssues;
+
+  // 記事全体修正用state
+  const [wholeRevisionPrompt, setWholeRevisionPrompt] = useState<string>("");
+  const [isWholeRevising, setIsWholeRevising] = useState(false);
+  const [wholeRevisionError, setWholeRevisionError] = useState<string | null>(null);
+  const [showWholeRevisionPanel, setShowWholeRevisionPanel] = useState(false);
+
+  const handleReviseWhole = async () => {
+    const prompt = wholeRevisionPrompt;
+    if (!prompt || !prompt.trim()) return;
+
+    setIsWholeRevising(true);
+    setWholeRevisionError(null);
+
+    try {
+      const revisedHtml = await reviseArticleWhole(article.htmlContent, prompt.trim(), keyword);
+      let cleaned = fixWordPressListBlocks(revisedHtml);
+      cleaned = fixWordPressTableBlocks(cleaned);
+
+      const updated = {
+        ...article,
+        htmlContent: cleaned,
+        plainText: cleaned.replace(/<[^>]*>/g, ''),
+      };
+      if (onArticleUpdate) {
+        onArticleUpdate(updated);
+      }
+      setWholeRevisionPrompt("");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '修正に失敗しました';
+      setWholeRevisionError(msg);
+    } finally {
+      setIsWholeRevising(false);
+    }
+  };
 
   const handleFinalProofread = async () => {
     if (isFinalProofreading) return;
@@ -427,7 +490,17 @@ ${article.plainText}`;
 
           {/* 指摘事項サマリー */}
           <div>
-            <h4 className="text-sm font-bold text-gray-700 mb-2">指摘事項</h4>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-bold text-gray-700">指摘事項</h4>
+              <label className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={showInternalLibOnly}
+                  onChange={(e) => setShowInternalLibOnly(e.target.checked)}
+                />
+                社内ライブラリ照合のみ（{internalLibCount}件）
+              </label>
+            </div>
             <div className="grid grid-cols-3 gap-2 mb-2 text-sm">
               <div className="bg-white rounded p-2 border">
                 <span className="text-red-600 font-semibold">重大:</span>{" "}
@@ -443,12 +516,11 @@ ${article.plainText}`;
               </div>
             </div>
 
-            {proofResult.criticalIssues.length +
-              proofResult.majorIssues.length +
-              proofResult.minorIssues.length ===
-            0 ? (
+            {displayedIssues.length === 0 ? (
               <div className="text-sm text-green-700 bg-white p-3 rounded border border-green-200">
-                ✅ 指摘事項は検出されませんでした。
+                {showInternalLibOnly
+                  ? "✅ 社内ライブラリ照合の指摘はありません。"
+                  : "✅ 指摘事項は検出されませんでした。"}
               </div>
             ) : (
               <details className="text-sm" open>
@@ -456,11 +528,7 @@ ${article.plainText}`;
                   指摘の詳細を表示
                 </summary>
                 <ul className="mt-2 space-y-2">
-                  {[
-                    ...proofResult.criticalIssues,
-                    ...proofResult.majorIssues,
-                    ...proofResult.minorIssues,
-                  ]
+                  {displayedIssues
                     .slice(0, 30)
                     .map(function (issue, idx) {
                       var severityLabel =
@@ -547,70 +615,6 @@ ${article.plainText}`;
             )}
           </div>
 
-          {/* 改善提案 */}
-          {proofResult.suggestions && proofResult.suggestions.length > 0 && (
-            <div>
-              <h4 className="text-sm font-bold text-gray-700 mb-2">
-                改善提案（{proofResult.suggestions.length}件）
-              </h4>
-              <details className="text-sm" open>
-                <summary className="cursor-pointer text-blue-700 hover:underline font-semibold">
-                  提案を表示
-                </summary>
-                <ul className="mt-2 space-y-2">
-                  {proofResult.suggestions
-                    .slice(0, 15)
-                    .map(function (s, idx) {
-                      var priorityLabel =
-                        s.priority === "high"
-                          ? "優先度・高"
-                          : s.priority === "medium"
-                          ? "優先度・中"
-                          : "優先度・低";
-                      var priorityColor =
-                        s.priority === "high"
-                          ? "bg-red-100 text-red-800"
-                          : s.priority === "medium"
-                          ? "bg-amber-100 text-amber-800"
-                          : "bg-gray-100 text-gray-700";
-                      return (
-                        <li
-                          key={idx}
-                          className="bg-white p-3 rounded border border-gray-200"
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <span
-                              className={
-                                "text-xs font-bold px-2 py-0.5 rounded " +
-                                priorityColor
-                              }
-                            >
-                              {priorityLabel}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {s.type}
-                            </span>
-                          </div>
-                          <div className="text-gray-800 mb-1">
-                            {s.description}
-                          </div>
-                          {s.implementation && (
-                            <div className="text-xs bg-blue-50 border-l-2 border-blue-300 px-2 py-1 my-1">
-                              <span className="font-semibold text-blue-700">
-                                実装方法:
-                              </span>{" "}
-                              <span className="text-gray-700">
-                                {s.implementation}
-                              </span>
-                            </div>
-                          )}
-                        </li>
-                      );
-                    })}
-                </ul>
-              </details>
-            </div>
-          )}
         </div>
       )}
 
@@ -636,6 +640,50 @@ ${article.plainText}`;
                 prose-ul:my-4 prose-li:my-1"
               dangerouslySetInnerHTML={{ __html: article.htmlContent }}
             />
+
+            {/* 記事全体修正パネル */}
+            <div className="mt-6 border-t border-gray-200 pt-4">
+              <button
+                onClick={() => setShowWholeRevisionPanel(!showWholeRevisionPanel)}
+                className="w-full px-4 py-3 flex items-center justify-between text-left bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
+              >
+                <span className="text-sm font-semibold text-indigo-800">
+                  記事全体を修正（自然言語で指示）
+                </span>
+                <span className="text-indigo-400 text-xs">
+                  {showWholeRevisionPanel ? '▲ 閉じる' : '▼ 開く'}
+                </span>
+              </button>
+              {showWholeRevisionPanel && (
+                <div className="mt-3 space-y-3">
+                  {wholeRevisionError && (
+                    <p className="text-sm text-red-500 bg-red-50 p-2 rounded">{wholeRevisionError}</p>
+                  )}
+                  <div className="bg-indigo-50/50 p-3 rounded-lg border border-indigo-200">
+                    <p className="text-xs text-gray-600 mb-2">
+                      例: 「全体的にもう少しやわらかい口調にして」「専門用語が出てきたら必ず注釈を入れて」「読者の不安に寄り添うトーンに統一して」
+                    </p>
+                    <div className="flex gap-2">
+                      <textarea
+                        value={wholeRevisionPrompt}
+                        onChange={(e) => setWholeRevisionPrompt(e.target.value)}
+                        placeholder="記事全体への修正指示を入力..."
+                        className="flex-1 px-3 py-2 text-sm border border-indigo-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                        rows={3}
+                        disabled={isWholeRevising}
+                      />
+                      <button
+                        onClick={handleReviseWhole}
+                        disabled={isWholeRevising || !wholeRevisionPrompt.trim()}
+                        className="self-end px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                      >
+                        {isWholeRevising ? '修正中...' : 'AI全体修正'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           // コードモード
