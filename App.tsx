@@ -44,29 +44,59 @@ import FactCheckPage from "./components/FactCheckPage";
 import ArticleRevisionForm from "./components/ArticleRevisionForm";
 import { useImageAgent, type ArticleDataForImageAgent } from "./hooks/useImageAgent";
 import { ImageGeneratorIframe } from "./components/ImageGeneratorIframe";
+import {
+  loadSession,
+  saveSession,
+  clearSession,
+  hasMeaningfulProgress,
+  formatSavedAt,
+  SESSION_MAX_AGE_HOURS,
+  type PersistedSession,
+} from "./utils/sessionPersistence";
 
 const App: React.FC = () => {
+  // 作業状態の復元（ページ再読み込み・タブ破棄後も初期画面に戻らないようにする）
+  // ※ 各 useState の初期値より前に1回だけ読む。以降は変更のたびに自動保存（下の useEffect）
+  const [restoredSession] = useState<PersistedSession | null>(() => loadSession());
+  const [restoreNotice, setRestoreNotice] = useState<string | null>(
+    restoredSession
+      ? `${formatSavedAt(restoredSession.savedAt)} 時点の作業状態を復元しました`
+      : null
+  );
+
   const [currentPage, setCurrentPage] = useState<
     "main" | "textcheck" | "factcheck" | "revision"
   >("main");
-  const [keyword, setKeyword] = useState<string>("");
-  const [outline, setOutline] = useState<SeoOutline | null>(null);
-  const [outlineV2, setOutlineV2] = useState<SeoOutlineV2 | null>(null);
+  const [keyword, setKeyword] = useState<string>(
+    restoredSession ? restoredSession.keyword : ""
+  );
+  const [outline, setOutline] = useState<SeoOutline | null>(
+    restoredSession ? restoredSession.outline : null
+  );
+  const [outlineV2, setOutlineV2] = useState<SeoOutlineV2 | null>(
+    restoredSession ? restoredSession.outlineV2 : null
+  );
   const [competitorResearch, setCompetitorResearch] =
-    useState<CompetitorResearchResult | null>(null);
+    useState<CompetitorResearchResult | null>(
+      restoredSession ? restoredSession.competitorResearch : null
+    );
   const [sources, setSources] = useState<GroundingChunk[] | undefined>(
-    undefined
+    restoredSession ? restoredSession.sources : undefined
   );
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<
     "research" | "frequency" | "outline" | "article" | "references"
-  >("research");
+  >(restoredSession ? restoredSession.activeTab : "research");
 
   // デフォルト画面の上位タブ（原稿作成 / キーワード選定）
-  const [mainMode, setMainMode] = useState<"article" | "keyword">("article");
+  const [mainMode, setMainMode] = useState<"article" | "keyword">(
+    restoredSession ? restoredSession.mainMode : "article"
+  );
   // キーワード選定タブから原稿作成へ引き継ぐキーワード
-  const [articleSeedKeyword, setArticleSeedKeyword] = useState<string>("");
+  const [articleSeedKeyword, setArticleSeedKeyword] = useState<string>(
+    restoredSession ? restoredSession.keyword : ""
+  );
 
   // 候補KWを原稿作成タブに引き継ぐ
   const handleUseKeywordForArticle = useCallback((kw: string) => {
@@ -77,13 +107,15 @@ const App: React.FC = () => {
 
   // 戦略的キーワードリスト
   const [strategicKeywords, setStrategicKeywords] =
-    useState<StrategicKeywordList | null>(null);
+    useState<StrategicKeywordList | null>(
+      restoredSession ? restoredSession.strategicKeywords : null
+    );
   const [isGeneratingStrategicKeywords, setIsGeneratingStrategicKeywords] =
     useState<boolean>(false);
 
   // 時事ネタ（ニュースジャッキング）キーワード
   const [trendKeywords, setTrendKeywords] = useState<TrendKeywordList | null>(
-    null
+    restoredSession ? restoredSession.trendKeywords : null
   );
   const [isGeneratingTrendKeywords, setIsGeneratingTrendKeywords] =
     useState<boolean>(false);
@@ -125,8 +157,12 @@ const App: React.FC = () => {
   }, [keyword, competitorResearch]);
 
   // 参考資料の選択状態
-  const [selectedRefMaterialIds, setSelectedRefMaterialIds] = useState<string[]>([]);
-  const [refMaterialContext, setRefMaterialContext] = useState<string>("");
+  const [selectedRefMaterialIds, setSelectedRefMaterialIds] = useState<string[]>(
+    restoredSession ? restoredSession.selectedRefMaterialIds : []
+  );
+  const [refMaterialContext, setRefMaterialContext] = useState<string>(
+    restoredSession ? restoredSession.refMaterialContext : ""
+  );
   const [availableMaterials, setAvailableMaterials] = useState<ReferenceMaterial[]>([]);
   const [analysisProgress, setAnalysisProgress] = useState<{
     current: number;
@@ -139,10 +175,14 @@ const App: React.FC = () => {
     metaDescription: string;
     htmlContent: string;
     plainText: string;
-  } | null>(null);
+  } | null>(restoredSession ? restoredSession.generatedArticle : null);
   const [showArticleWriter, setShowArticleWriter] = useState(false);
-  const [writingMode, setWritingMode] = useState<"v2" | "v3">("v3");
-  const [isV2Mode, setIsV2Mode] = useState<boolean>(false);
+  const [writingMode, setWritingMode] = useState<"v2" | "v3">(
+    restoredSession ? restoredSession.writingMode : "v3"
+  );
+  const [isV2Mode, setIsV2Mode] = useState<boolean>(
+    restoredSession ? restoredSession.isV2Mode : false
+  );
 
   // フル自動モード用の状態
   const [isFullAutoMode, setIsFullAutoMode] = useState<boolean>(false);
@@ -197,6 +237,82 @@ const App: React.FC = () => {
     listMaterials()
       .then(function(data) { setAvailableMaterials(data); })
       .catch(function(err) { console.warn("参考資料一覧の取得に失敗:", err); });
+  }, []);
+
+  // 作業状態の自動保存（変更から500ms後に localStorage へ書き込む）
+  // 実行中フラグ・キュー状態・モーダル開閉は保存しない（復元時に API 呼び出しが再発しないようにするため）
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const snapshot = {
+        keyword,
+        outline,
+        outlineV2,
+        competitorResearch,
+        sources,
+        activeTab,
+        mainMode,
+        isV2Mode,
+        writingMode,
+        generatedArticle,
+        strategicKeywords,
+        trendKeywords,
+        selectedRefMaterialIds,
+        refMaterialContext,
+      };
+      if (hasMeaningfulProgress(snapshot)) {
+        saveSession(snapshot);
+      } else if (!keyword) {
+        // 何も進捗がなくキーワードも空なら保存済みセッションを消す（リセット後の再保存防止）
+        clearSession();
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [
+    keyword,
+    outline,
+    outlineV2,
+    competitorResearch,
+    sources,
+    activeTab,
+    mainMode,
+    isV2Mode,
+    writingMode,
+    generatedArticle,
+    strategicKeywords,
+    trendKeywords,
+    selectedRefMaterialIds,
+    refMaterialContext,
+  ]);
+
+  // 作業状態を初期化して最初の画面に戻す（保存済みセッションも削除）
+  const handleResetSession = useCallback(() => {
+    if (
+      !window.confirm(
+        "現在の作業状態（競合調査・構成案・記事）を破棄して最初の画面に戻します。よろしいですか？"
+      )
+    ) {
+      return;
+    }
+    clearSession();
+    setKeyword("");
+    setArticleSeedKeyword("");
+    setOutline(null);
+    setOutlineV2(null);
+    setCompetitorResearch(null);
+    setSources(undefined);
+    setGeneratedArticle(null);
+    setStrategicKeywords(null);
+    setTrendKeywords(null);
+    setSelectedRefMaterialIds([]);
+    setRefMaterialContext("");
+    setIsV2Mode(false);
+    setWritingMode("v3");
+    setActiveTab("research");
+    setMainMode("article");
+    setShowArticleWriter(false);
+    setShowWriterDirectly(false);
+    setError(null);
+    setRestoreNotice(null);
   }, []);
 
   // Keep-alive: フル自動モード処理中はバックエンドを5分ごとにpingしてアイドル終了を防ぐ
@@ -1502,7 +1618,27 @@ const App: React.FC = () => {
               queueProgress &&
               ` (${queueProgress.current}/${queueProgress.total})`}
           </button>
+          <button
+            onClick={handleResetSession}
+            disabled={isLoading || isProcessingQueue}
+            title={`作業状態は自動保存され、${SESSION_MAX_AGE_HOURS}時間以内なら再読み込み後も復元されます`}
+            className="px-4 py-2 bg-white text-gray-600 hover:bg-gray-50 border border-gray-200 rounded-lg transition-all duration-200 text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            作業をリセット
+          </button>
         </div>
+        {restoreNotice && (
+          <div className="mt-4 flex items-center justify-between gap-3 px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-800">
+            <span>💾 {restoreNotice}</span>
+            <button
+              onClick={() => setRestoreNotice(null)}
+              className="text-emerald-700 hover:text-emerald-900 font-medium"
+              aria-label="通知を閉じる"
+            >
+              ✕
+            </button>
+          </div>
+        )}
       </header>
 
       <main className="w-full max-w-5xl flex-grow">

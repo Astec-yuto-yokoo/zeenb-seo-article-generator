@@ -158,6 +158,18 @@ Gemini APIキーをブラウザに露出させない。実キーは**サーバ�
   - CORS の `allowedHeaders` に **`x-goog-api-key` / `x-goog-api-client` を含めること**（genai SDK が付与するため）。無いとブラウザのプリフライトで弾かれ画像生成が `Failed to fetch` になる。**これらを削除してはならない**
 - **未対応（別途要ローテーション）**: Anthropic・OpenAI・Serper の `VITE_` 版は依然ブラウザ露出。同様のサーバー側化が望ましい
 
+## 作業状態の永続化（セッション復元）
+
+ページ再読み込み・ブラウザのタブ破棄・Vite開発サーバー再接続時の自動リロード（PCスリープ等でWebSocketが切れると発生）で React state が消え「最初の画面に戻る」問題への対策。
+
+- **実装**: `utils/sessionPersistence.ts`（`loadSession` / `saveSession` / `clearSession`）。localStorage キー `zeenbSeoSession_v1`、保持期間 48 時間（`SESSION_MAX_AGE_HOURS`）
+- **App.tsx**: 各 `useState` の初期値を `restoredSession` から与え、メインフロー state（keyword / outline / outlineV2 / competitorResearch / sources / activeTab / mainMode / isV2Mode / writingMode / generatedArticle / strategicKeywords / trendKeywords / selectedRefMaterialIds / refMaterialContext）を変更 500ms 後に自動保存する
+- **保存しないもの**: 実行中フラグ（isLoading / isFullAutoMode / キュー状態）・`showArticleWriter` 等のモーダル開閉。復元時に API 呼び出しが再発するのを防ぐため。**ArticleWriter を復元時に自動で開かないこと**（`skipAutoGenerate` が false だと執筆が再実行される）
+- 進捗が何もなくキーワードも空の場合は保存済みセッションを削除する（リセット後の空データ再保存防止）。容量超過時は競合調査結果を除いて再保存する
+- **UI**: ヘッダーの「作業をリセット」ボタン（`handleResetSession`、confirm あり）で state と保存データを初期化。復元時はヘッダー下に「○時点の作業状態を復元しました」バナーを表示
+- 記事ドラフトの自動保存（`ArticleWriter.tsx` の `articleWriter_draft_*`）とは別キーで共存する
+- 3プロジェクト共通反映対象（apaman / zeenb / factory）
+
 ## 見出し番号付与ルール（絶対厳守）
 
 最終記事HTMLの全 `<h2>` / `<h3>` には、文頭に番号を必ず振る。
