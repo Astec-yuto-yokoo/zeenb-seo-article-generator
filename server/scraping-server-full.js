@@ -7,6 +7,7 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const puppeteer = require("puppeteer");
 const fetch = require("node-fetch");
+const { appendFaqSchema } = require("./api/faq-schema");
 const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
@@ -801,9 +802,15 @@ app.post("/api/wordpress/create-post", async (req, res) => {
   }
 
   try {
+    // FAQセクションがあれば FAQPage JSON-LD を本文末尾に付与
+    const faqResult = appendFaqSchema(content);
+    if (faqResult.faqCount > 0) {
+      console.log(`🧩 FAQPage JSON-LD 付与: ${faqResult.faqCount}問`);
+    }
+
     const postData = {
       title,
-      content,
+      content: faqResult.content,
       status: status || "draft",
     };
 
