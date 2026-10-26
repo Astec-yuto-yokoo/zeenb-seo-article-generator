@@ -428,23 +428,33 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
         // 一時的に保存（チェック後にクリーンアップするため）
         console.log("✅ Ver.3生成完了（Grounding機能使用）");
 
-        // 品質チェックも実行
-        // 出典タグの最低出現回数（記事長に応じて動的に決定）
-        const minSourceCitations = targetChars >= 6000 ? 3 : targetChars >= 3000 ? 2 : 1;
-        const checkResult = await checkArticleV3({
-          article: v3Result,
-          outline: outlineMarkdown,
-          keyword: keyword,
-          referenceMaterialContext: referenceMaterialContext,
-          minSourceCitations: minSourceCitations,
-        });
+        // 品質チェックも実行（参考ログのみ・非致命）
+        // 執筆（Claude）は既に完了しているため、チェック（Gemini）が通信断や
+        // タイムアウトで失敗しても記事を破棄しない。失敗時は警告ログだけ残して続行する。
+        setGenerationProgress("記事の品質チェック中...");
+        try {
+          // 出典タグの最低出現回数（記事長に応じて動的に決定）
+          const minSourceCitations = targetChars >= 6000 ? 3 : targetChars >= 3000 ? 2 : 1;
+          const checkResult = await checkArticleV3({
+            article: v3Result,
+            outline: outlineMarkdown,
+            keyword: keyword,
+            referenceMaterialContext: referenceMaterialContext,
+            minSourceCitations: minSourceCitations,
+          });
 
-        console.log(`📊 品質スコア: ${checkResult.overallScore}/100`);
-        if (checkResult.sourceCitationStats) {
-          const s = checkResult.sourceCitationStats;
-          console.log(`📚 出典タグ: ${s.actual}/${s.expected}箇所 (${s.passed ? '✅合格' : '❌不足'})`);
+          console.log(`📊 品質スコア: ${checkResult.overallScore}/100`);
+          if (checkResult.sourceCitationStats) {
+            const s = checkResult.sourceCitationStats;
+            console.log(`📚 出典タグ: ${s.actual}/${s.expected}箇所 (${s.passed ? '✅合格' : '❌不足'})`);
+          }
+          console.log("📝 改善提案:", checkResult.improvements);
+        } catch (checkError) {
+          console.warn(
+            "⚠️ 品質チェックに失敗しましたが、執筆済みの記事はそのまま採用します:",
+            checkError instanceof Error ? checkError.message : checkError
+          );
         }
-        console.log("📝 改善提案:", checkResult.improvements);
 
         // クリーンアップ処理を実行
         const cleanedContent = cleanupArticleContent(v3Result);
