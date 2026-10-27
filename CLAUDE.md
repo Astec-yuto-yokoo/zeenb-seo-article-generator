@@ -231,6 +231,7 @@ Gemini APIキーをブラウザに露出させない。実キーは**サーバ�
   → 記事修正（人間確認後ボタン押下時のみ）
 ```
 
+- **競合調査（`competitorResearchWithWebFetch.ts`）のエラー処理**: 冒頭で `isBackendReachable()`（`/api/health`）によりバックエンドの死活を確認し、未起動なら `RENDER_SERVER_DOWN: …` で即停止する。共通トピック抽出（Gemini flash）は `callGeminiWithRetry` で再試行し、失敗しても空配列で続行する（非致命）。ネットワーク系エラーは内部コード `RENDER_RESTART_REQUIRED: <原因>` に変換する（コードはキュー実行の復旧判定で使うため削除禁止。原因の詳細を必ず後ろに付ける）。画面表示は `App.tsx` の `toUserFacingAnalysisError()` が内部コードを利用者向け文言＋詳細に変換する。内部コードだけを画面に出してはならない。3プロジェクト共通反映対象
 - **執筆チェック（`checkArticleV3`）は参考ログのみで非致命**。`ArticleWriter.tsx` の V3 経路では try/catch で包み、Gemini 側の通信断・タイムアウトで失敗しても Claude が執筆済みの記事を破棄せず採用する。チェック失敗で記事生成全体を throw させてはならない（過去に「Failed to fetch」で執筆済み記事ごと消えた）。3プロジェクト共通反映対象
 
 ## Google Drive ADC認証

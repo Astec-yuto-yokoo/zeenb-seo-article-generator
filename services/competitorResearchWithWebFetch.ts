@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { CompetitorResearchResult, ArticleAnalysis } from "../types";
 import { fetchMultiplePages, type PageAnalysis } from "./webFetchService";
 import { searchGoogle, formatSearchResults } from "./googleSearchService";
+import { callGeminiWithRetry } from "./geminiRetry";
 import {
   scrapeMultipleWithPuppeteer,
   checkScrapingServerHealth,
@@ -39,6 +40,26 @@ function cleanJsonString(str: string): string {
   return str.trim();
 }
 
+// バックエンド（スクレイピングサーバー）の死活確認。
+// 未起動のまま競合調査に入ると "Failed to fetch" が内部コード
+// RENDER_RESTART_REQUIRED に変換されて原因が分からなくなるため、事前に確認して原因を明示する。
+function getBackendUrl(): string {
+  const envUrl = import.meta.env.VITE_BACKEND_URL;
+  return envUrl && typeof envUrl === "string" ? envUrl : "http://localhost:3003";
+}
+
+async function isBackendReachable(): Promise<boolean> {
+  try {
+    const apiKey = import.meta.env.VITE_INTERNAL_API_KEY;
+    const headers: Record<string, string> = {};
+    if (apiKey) headers["x-api-key"] = apiKey;
+    const response = await fetch(`${getBackendUrl()}/api/health`, { headers });
+    return response.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
 // タイトルから実際のURLを推測（使わないようにする）
 function guessUrlFromTitle(title: string): string {
   // この関数は基本的に使わない（URLが取得できない場合のみ）
@@ -59,6 +80,14 @@ export const generateCompetitorResearch = async (
   if (useMockData) {
     console.log("🎭 モックモード: 固定データを返します");
     return getMockCompetitorResearch(keyword);
+  }
+
+  // 事前にバックエンドの死活を確認し、未起動なら原因を明示して停止する
+  const backendAlive = await isBackendReachable();
+  if (!backendAlive) {
+    throw new Error(
+      `RENDER_SERVER_DOWN: health check failed (${getBackendUrl()}/api/health)`
+    );
   }
 
   // Google Search APIはサーバー側で設定を確認するため、クライアント側では常にtrue
@@ -453,18 +482,27 @@ JSONで返してください：
       },
     });
 
-    const topicsResult = await topicsModel.generateContent(topicsPrompt);
-    const topicsText = topicsResult.response.text();
-
-    let commonTopics = [
-      "SEO基礎",
-      "内部対策",
-      "外部対策",
-      "コンテンツSEO",
-      "テクニカルSEO",
-    ];
+    // 共通トピック抽出は参考情報のため非致命。Gemini混雑（503/429）やプロキシ断は再試行し、
+    // それでも失敗した場合は空配列で続行する（ここで競合調査全体を失敗させない）。
+    let topicsText = "";
     try {
-      const topicsMatch = topicsText.match(/\{[\s\S]*\}/);
+      const topicsResult = await callGeminiWithRetry(
+        () => topicsModel.generateContent(topicsPrompt),
+        "共通トピック抽出"
+      );
+      topicsText = topicsResult.response.text();
+    } catch (topicsError: any) {
+      console.warn(
+        "⚠️ 共通トピック抽出に失敗しました（空のまま続行）:",
+        topicsError && topicsError.message ? topicsError.message : topicsError
+      );
+    }
+
+    let commonTopics: string[] = topicsText
+      ? ["SEO基礎", "内部対策", "外部対策", "コンテンツSEO", "テクニカルSEO"]
+      : [];
+    try {
+      const topicsMatch = topicsText ? topicsText.match(/\{[\s\S]*\}/) : null;
       if (topicsMatch) {
         const topicsData = JSON.parse(cleanJsonString(topicsMatch[0]));
         commonTopics = topicsData.commonTopics || commonTopics;
@@ -527,7 +565,9 @@ JSONで返してください：
     if (isNetworkError) {
       console.log("🔄 ネットワークエラー検出、Render自動復旧を試行");
       console.log("🔍 エラー詳細:", error?.message);
-      throw new Error("RENDER_RESTART_REQUIRED");
+      // 内部コードはキュー実行時の復旧判定（App.tsx）で使うため残し、原因の詳細を後ろに付ける
+      const detail = error && error.message ? String(error.message) : String(error);
+      throw new Error(`RENDER_RESTART_REQUIRED: ${detail}`);
     }
 
     throw new Error(`競合分析エラー: ${error?.message || String(error)}`);

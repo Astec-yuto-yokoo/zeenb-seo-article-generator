@@ -54,6 +54,31 @@ import {
   type PersistedSession,
 } from "./utils/sessionPersistence";
 
+// 競合調査で発生したサーバー系エラー（内部コード RENDER_RESTART_REQUIRED / RENDER_SERVER_DOWN）を
+// 利用者向けの文言に変換する。内部コードはキュー実行の復旧判定で使うため、Error の message 自体は変えない。
+function toUserFacingAnalysisError(err: unknown): string {
+  const message = err instanceof Error ? err.message : "";
+  if (!message) {
+    return "分析中にエラーが発生しました。しばらくしてからもう一度お試しください。";
+  }
+  const isServerError =
+    message.indexOf("RENDER_RESTART_REQUIRED") !== -1 ||
+    message.indexOf("RENDER_SERVER_DOWN") !== -1;
+  if (!isServerError) {
+    return message;
+  }
+  const detail = message
+    .replace(/RENDER_RESTART_REQUIRED:?\s*/g, "")
+    .replace(/RENDER_SERVER_DOWN:?\s*/g, "")
+    .trim();
+  const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:3003";
+  return (
+    `競合調査サーバー（${backendUrl}）との通信に失敗しました。` +
+    "サーバーが起動しているか確認してから、もう一度お試しください。" +
+    (detail ? `（詳細: ${detail}）` : "")
+  );
+}
+
 const App: React.FC = () => {
   // 作業状態の復元（ページ再読み込み・タブ破棄後も初期画面に戻らないようにする）
   // ※ 各 useState の初期値より前に1回だけ読む。以降は変更のたびに自動保存（下の useEffect）
@@ -636,11 +661,7 @@ const App: React.FC = () => {
         }
       } catch (err) {
         console.error(err);
-        setError(
-          err instanceof Error
-            ? err.message
-            : "分析中にエラーが発生しました。しばらくしてからもう一度お試しください。"
-        );
+        setError(toUserFacingAnalysisError(err));
       } finally {
         setIsLoading(false);
       }
@@ -752,11 +773,7 @@ const App: React.FC = () => {
         setActiveTab("outline");
       } catch (err) {
         console.error(err);
-        setError(
-          err instanceof Error
-            ? err.message
-            : "分析中にエラーが発生しました。しばらくしてからもう一度お試しください。"
-        );
+        setError(toUserFacingAnalysisError(err));
       } finally {
         setIsLoading(false);
       }
