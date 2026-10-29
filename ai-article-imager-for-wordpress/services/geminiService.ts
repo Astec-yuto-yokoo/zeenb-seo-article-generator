@@ -106,6 +106,11 @@ export const generateImage = async (
             },
             config: {
               responseModalities: [Modality.IMAGE, Modality.TEXT],
+              // 2K・16:9で生成する（Proは1Kと同価格）。後段の ensure16x9 で1920×1080に縮小するため、1Kを拡大するより精細になる
+              imageConfig: {
+                aspectRatio: "16:9",
+                imageSize: "2K",
+              },
             },
           });
 

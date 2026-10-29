@@ -163,6 +163,7 @@ Gemini APIキーをブラウザに露出させない。実キーは**サーバ�
 `ai-article-imager-for-wordpress/services/geminiService.ts` は画像生成とテキスト処理でモデルを分ける。
 
 - **画像生成**（`generateImage`）: `gemini-3-pro-image`（Nano Banana Pro 正式版）。ベース画像を下絵にした編集生成で運用する。プレビュー版 `gemini-3-pro-image-preview` は停止予定日（2026-06-25）を過ぎているため戻さないこと
+- **出力サイズ**: `generateImage` の `config.imageConfig` で `aspectRatio: "16:9"`・`imageSize: "2K"`（2752×1536）を指定し、後段の `ensure16x9` で1920×1080に縮小する（Proは1Kと2Kが同価格）。`imageConfig` の指定には `@google/genai` 1.52.0 以上が必要（1.19 系では Gemini 画像モデルの解像度を指定できない）。SDK を下げないこと
 - **テキスト処理**: 撮影指示文（`generatePhotographyPrompt`）・背景提案（`generateBackgroundInstruction`）は `TEXT_MODEL`＝`gemini-pro-latest`、画像内文字検出（`checkForTextInImage`）・alt要約（`summarizeText`）は `TEXT_MODEL_FAST`＝`gemini-flash-latest`（本体と同じエイリアス）
 - **テキスト処理に画像モデルを使わないこと**（撮影指示文の質が画像の出来を左右するため）
 - 3プロジェクト共通反映対象（apaman / zeenb / factory）
