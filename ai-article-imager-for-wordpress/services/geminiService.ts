@@ -39,6 +39,11 @@ async function retryWithExponentialBackoff<T>(
 // （従来も実際に有効なキーは1つのみ＝挙動は変わらない）。
 const aiClients = [createProxiedGenAI()];
 
+// 撮影指示文・背景提案・alt要約・文字検出など文章を返す処理は画像モデルではなくテキストモデルで行う。
+// 画像モデル（gemini-3-pro-image）は画像生成（generateImage）専用。本体と同じエイリアスを使う。
+const TEXT_MODEL = "gemini-pro-latest";
+const TEXT_MODEL_FAST = "gemini-flash-latest";
+
 console.log(`✅ Geminiプロキシ経由でクライアントを初期化しました（実キーはサーバー側のみ）`);
 
 function dataUrlToBlob(dataUrl: string): { data: string; mimeType: string } {
@@ -75,8 +80,8 @@ export const generateImage = async (
     let response: any;
 
     try {
-      // gemini-3-pro-image-previewを使用
-      const modelsToTry = ["gemini-3-pro-image-preview"];
+      // gemini-3-pro-image（Nano Banana Pro 正式版）を使用。プレビュー版は停止予定日（2026-06-25）を過ぎているため使わない
+      const modelsToTry = ["gemini-3-pro-image"];
 
       let lastError;
 
@@ -217,7 +222,7 @@ export const checkForTextInImage = async (
   return retryWithExponentialBackoff(async () => {
     const ai = getNextAIClient();
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-image-preview",
+      model: TEXT_MODEL_FAST,
       contents: {
         parts: [
           {
@@ -256,7 +261,7 @@ Background Suggestion:`;
 
     const ai = getNextAIClient();
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-image-preview",
+      model: TEXT_MODEL,
       contents: prompt,
     });
     return response.text.trim().replace(/"/g, ""); // Remove quotes from response
@@ -581,7 +586,7 @@ Photography Direction:`;
 
     const ai = getNextAIClient();
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-image-preview",
+      model: TEXT_MODEL,
       contents: systemPrompt,
     });
 
@@ -606,7 +611,7 @@ export const summarizeText = async (text: string): Promise<string> => {
   return retryWithExponentialBackoff(async () => {
     const ai = getNextAIClient();
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-image-preview",
+      model: TEXT_MODEL_FAST,
       contents: `Summarize the following text in a single, concise sentence suitable for an image alt text: "${text}"`,
     });
     return response.text.trim();

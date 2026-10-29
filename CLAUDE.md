@@ -158,6 +158,15 @@ Gemini APIキーをブラウザに露出させない。実キーは**サーバ�
   - CORS の `allowedHeaders` に **`x-goog-api-key` / `x-goog-api-client` を含めること**（genai SDK が付与するため）。無いとブラウザのプリフライトで弾かれ画像生成が `Failed to fetch` になる。**これらを削除してはならない**
 - **未対応（別途要ローテーション）**: Anthropic・OpenAI・Serper の `VITE_` 版は依然ブラウザ露出。同様のサーバー側化が望ましい
 
+## 画像生成エージェントのモデル使い分け
+
+`ai-article-imager-for-wordpress/services/geminiService.ts` は画像生成とテキスト処理でモデルを分ける。
+
+- **画像生成**（`generateImage`）: `gemini-3-pro-image`（Nano Banana Pro 正式版）。ベース画像を下絵にした編集生成で運用する。プレビュー版 `gemini-3-pro-image-preview` は停止予定日（2026-06-25）を過ぎているため戻さないこと
+- **テキスト処理**: 撮影指示文（`generatePhotographyPrompt`）・背景提案（`generateBackgroundInstruction`）は `TEXT_MODEL`＝`gemini-pro-latest`、画像内文字検出（`checkForTextInImage`）・alt要約（`summarizeText`）は `TEXT_MODEL_FAST`＝`gemini-flash-latest`（本体と同じエイリアス）
+- **テキスト処理に画像モデルを使わないこと**（撮影指示文の質が画像の出来を左右するため）
+- 3プロジェクト共通反映対象（apaman / zeenb / factory）
+
 ## 作業状態の永続化（セッション復元）
 
 ページ再読み込み・ブラウザのタブ破棄・Vite開発サーバー再接続時の自動リロード（PCスリープ等でWebSocketが切れると発生）で React state が消え「最初の画面に戻る」問題への対策。
