@@ -241,6 +241,7 @@ Gemini APIキーをブラウザに露出させない。実キーは**サーバ�
 ```
 
 - **競合調査（`competitorResearchWithWebFetch.ts`）のエラー処理**: 冒頭で `isBackendReachable()`（`/api/health`）によりバックエンドの死活を確認し、未起動なら `RENDER_SERVER_DOWN: …` で即停止する。共通トピック抽出（Gemini flash）は `callGeminiWithRetry` で再試行し、失敗しても空配列で続行する（非致命）。ネットワーク系エラーは内部コード `RENDER_RESTART_REQUIRED: <原因>` に変換する（コードはキュー実行の復旧判定で使うため削除禁止。原因の詳細を必ず後ろに付ける）。画面表示は `App.tsx` の `toUserFacingAnalysisError()` が内部コードを利用者向け文言＋詳細に変換する。内部コードだけを画面に出してはならない。3プロジェクト共通反映対象
+- **Gemini APIのクレジット残高切れ（HTTP 402 / `prepayment credits are depleted`）は原因と対処を画面に表示する**。判定は `utils/geminiErrors.ts`（本体）と `ai-article-imager-for-wordpress/utils/geminiErrors.ts`（画像エージェント）の `isGeminiCreditDepletedError()`。本体は `toUserFacingAnalysisError()` ほかのエラー表示で専用文言に置換。画像エージェントは `H2Section.errorKind = 'credit_depleted'` を立て、`ProcessingView.tsx` が順次生成を即停止（以降も必ず失敗するため）＋バナー表示し、「全画像を順次生成」再押下で402失敗分を pending に戻して再開する。キーワード選定モード（`mainMode === "keyword"`）にも `ErrorMessage` を描画する（記事作成モード側の表示はこのモードでは出ない）。コードでは復旧不可（AI Studioでチャージ or キー差し替え）。3プロジェクト共通反映対象（apaman / zeenb / factory）
 - **執筆チェック（`checkArticleV3`）は参考ログのみで非致命**。`ArticleWriter.tsx` の V3 経路では try/catch で包み、Gemini 側の通信断・タイムアウトで失敗しても Claude が執筆済みの記事を破棄せず採用する。チェック失敗で記事生成全体を throw させてはならない（過去に「Failed to fetch」で執筆済み記事ごと消えた）。3プロジェクト共通反映対象
 
 ## Google Drive ADC認証

@@ -23,6 +23,7 @@ export interface H2Section {
   status: 'pending' | 'generating' | 'success' | 'error';
   generatedImage: string | null; // base64 data URL
   errorMessage: string | null;
+  errorKind?: 'credit_depleted' | null; // Gemini APIのクレジット残高切れ（402）
   mediaId: number | null;
   sourceUrl: string | null;
   generationStep: string | null;

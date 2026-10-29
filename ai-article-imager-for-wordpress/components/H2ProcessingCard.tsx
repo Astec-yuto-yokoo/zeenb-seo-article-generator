@@ -3,6 +3,7 @@ import { H2Section } from '../types';
 import { generateImage, generatePhotographyPrompt } from '../services/geminiService';
 import { ensure16x9, applyPhotoPostProcessing } from '../services/imageProcessor';
 import { wrapPhotographyPrompt } from '../utils/promptHelper';
+import { isGeminiCreditDepletedError, GEMINI_CREDIT_DEPLETED_MESSAGE, GEMINI_CREDIT_DEPLETED_TITLE } from '../utils/geminiErrors';
 
 interface H2ProcessingCardProps {
     section: H2Section;
@@ -27,7 +28,7 @@ export const H2ProcessingCard: React.FC<H2ProcessingCardProps> = ({ section, upd
         }
 
         const isFirstGeneration = section.status === 'pending';
-        updateSection({ ...section, status: 'generating', errorMessage: null, generationStep: 'Starting...' });
+        updateSection({ ...section, status: 'generating', errorMessage: null, errorKind: null, generationStep: 'Starting...' });
 
         try {
             let currentPrompt = editablePrompt;
@@ -107,8 +108,20 @@ export const H2ProcessingCard: React.FC<H2ProcessingCardProps> = ({ section, upd
                 console.error('  - 数秒待ってから再試行することを推奨します');
             }
 
+            if (isGeminiCreditDepletedError(error)) {
+                updateSection({
+                    ...section,
+                    status: 'error',
+                    errorMessage: GEMINI_CREDIT_DEPLETED_MESSAGE,
+                    errorKind: 'credit_depleted',
+                    prompt: editablePrompt,
+                    generationStep: null,
+                });
+                return;
+            }
+
             const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-            updateSection({ ...section, status: 'error', errorMessage, prompt: editablePrompt, generationStep: null });
+            updateSection({ ...section, status: 'error', errorMessage, errorKind: null, prompt: editablePrompt, generationStep: null });
         } finally {
             if (isFirstGeneration) {
                 onProcessingComplete();
@@ -218,7 +231,13 @@ export const H2ProcessingCard: React.FC<H2ProcessingCardProps> = ({ section, upd
                                 {section.generationStep && <p className="mt-1 text-sm text-indigo-600">{section.generationStep}</p>}
                             </div>
                         )}
-                        {section.status === 'error' && (
+                        {section.status === 'error' && section.errorKind === 'credit_depleted' && (
+                            <div className="text-red-600 p-4 text-sm">
+                                <p className="font-bold mb-1">{GEMINI_CREDIT_DEPLETED_TITLE}</p>
+                                <p>{section.errorMessage}</p>
+                            </div>
+                        )}
+                        {section.status === 'error' && section.errorKind !== 'credit_depleted' && (
                             <div className="text-red-500 p-4">{section.errorMessage}</div>
                         )}
                         {section.status === 'pending' && section.baseImage && (

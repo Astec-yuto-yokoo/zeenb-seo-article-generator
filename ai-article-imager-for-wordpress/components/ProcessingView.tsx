@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { H2Section, ReportLog } from '../types';
 import { H2ProcessingCard } from './H2ProcessingCard';
+import { GEMINI_CREDIT_DEPLETED_TITLE, GEMINI_CREDIT_DEPLETED_MESSAGE } from '../utils/geminiErrors';
 
 interface ProcessingViewProps {
     sections: H2Section[];
@@ -23,6 +24,15 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ sections: initia
         
         // 順次処理中で、現在のセクションが完了した場合
         if (isProcessingAll && currentProcessingIndex !== null) {
+            // クレジット残高切れ（402）は以降のセクションも必ず失敗するため、順次処理をここで止める
+            if (updatedSection.status === 'error' && updatedSection.errorKind === 'credit_depleted') {
+                console.log('⛔ Gemini APIのクレジット残高切れのため順次処理を停止します');
+                setIsProcessingAll(false);
+                setCurrentProcessingIndex(null);
+                setCompletedCount(0);
+                alert(GEMINI_CREDIT_DEPLETED_TITLE + '\n\n' + GEMINI_CREDIT_DEPLETED_MESSAGE);
+                return;
+            }
             if (updatedSection.status === 'success' || updatedSection.status === 'error') {
                 // 完了カウントを更新
                 setCompletedCount(prev => prev + 1);
@@ -93,10 +103,17 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ sections: initia
 
     const handleGenerateAll = useCallback(() => {
         console.log('🚀 順次処理を開始します');
+        // クレジット残高切れで失敗したセクションは、チャージ後の再開時に未処理へ戻して再生成する
+        const resetSections = sections.map(s =>
+            s.status === 'error' && s.errorKind === 'credit_depleted'
+                ? { ...s, status: 'pending' as const, errorMessage: null, errorKind: null }
+                : s
+        );
+        setSections(resetSections);
         setIsProcessingAll(true);
         setCompletedCount(0);
         // 最初のpendingセクションから開始
-        const firstPendingIndex = sections.findIndex(s => s.status === 'pending');
+        const firstPendingIndex = resetSections.findIndex(s => s.status === 'pending');
         if (firstPendingIndex >= 0) {
             setCurrentProcessingIndex(firstPendingIndex);
         }
@@ -160,6 +177,7 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ sections: initia
     };
 
     const canProceed = sections.some(s => s.status === 'success');
+    const hasCreditDepletedError = sections.some(s => s.status === 'error' && s.errorKind === 'credit_depleted');
 
     return (
         <div className="space-y-6">
@@ -185,6 +203,12 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ sections: initia
                     </button>
                 </div>
             </div>
+            {hasCreditDepletedError && (
+                <div className="bg-red-50 border border-red-300 text-red-800 p-4 rounded-lg" role="alert">
+                    <p className="font-bold">{GEMINI_CREDIT_DEPLETED_TITLE}</p>
+                    <p className="mt-1 text-sm">{GEMINI_CREDIT_DEPLETED_MESSAGE}</p>
+                </div>
+            )}
             <div className="space-y-4">
                 {sections.map((section, index) => {
                     // 前のセクションで生成済みの写真プロンプトを収集（シーン重複回避用）
