@@ -133,6 +133,12 @@ interface ArticleWriterProps {
   onAutoComplete?: () => void; // フル自動モード完了時のコールバック
   onAutoRevisionStart?: () => void; // 自動修正開始時のコールバック
   skipAutoGenerate?: boolean; // 自動生成をスキップ（編集再開時用）
+  initialArticle?: {
+    title: string;
+    metaDescription: string;
+    htmlContent: string;
+    plainText: string;
+  } | null; // 編集再開時に表示する既存記事（skipAutoGenerate時の初期値）
   onOpenImageAgent?: (articleData: {
     title: string;
     content: string;
@@ -155,6 +161,7 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
   onAutoComplete,
   onAutoRevisionStart,
   skipAutoGenerate = false,
+  initialArticle = null,
   onOpenImageAgent,
   referenceMaterialContext,
   sectionReferenceMaterials,
@@ -182,10 +189,12 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
     metaDescription: string;
     htmlContent: string;
     plainText: string;
-  } | null>(null);
+  } | null>(initialArticle ? initialArticle : null);
   const [viewMode, setViewMode] = useState<"preview" | "code">("code");
   const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState("");
+  const [editedContent, setEditedContent] = useState(
+    initialArticle ? initialArticle.htmlContent : ""
+  );
   const [regeneratingSection, setRegeneratingSection] = useState<string | null>(
     null
   );
@@ -759,10 +768,17 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
       return;
     }
 
-    // skipAutoGenerateがtrueの場合は生成をスキップ
+    // skipAutoGenerateがtrueの場合は生成をスキップ（表示できる記事がある場合のみ）
     if (skipAutoGenerate) {
-      console.log("📝 編集再開モード: 自動生成をスキップ");
-      return;
+      if (article || initialArticle) {
+        console.log("📝 編集再開モード: 自動生成をスキップ");
+        return;
+      }
+      // 表示できる記事が無いままスキップすると「記事の生成に失敗しました」の
+      // 空画面になるため、フォールバックとして生成を実行する
+      console.warn(
+        "⚠️ 編集再開モードですが表示できる記事が無いため、記事生成を実行します"
+      );
     }
 
     // フラグを立ててから生成開始

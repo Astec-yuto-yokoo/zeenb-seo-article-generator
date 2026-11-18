@@ -213,6 +213,9 @@ const App: React.FC = () => {
     plainText: string;
   } | null>(restoredSession ? restoredSession.generatedArticle : null);
   const [showArticleWriter, setShowArticleWriter] = useState(false);
+  // ArticleWriterを「編集再開」として開いたかどうか。
+  // false（新規執筆）の場合は generatedArticle が残っていても自動生成を実行する
+  const [writerResumeMode, setWriterResumeMode] = useState(false);
   const [writingMode, setWritingMode] = useState<"v2" | "v3">(
     restoredSession ? restoredSession.writingMode : "v3"
   );
@@ -1002,6 +1005,7 @@ const App: React.FC = () => {
         // ArticleWriterを自動モードで開く
         setWritingMode("v3");
         setAutoArticleWriter(true);
+        setWriterResumeMode(false);
         setShowArticleWriter(true);
 
         // 記事生成、最終校閲、自動修正はArticleWriterコンポーネント内で処理される
@@ -2010,6 +2014,7 @@ const App: React.FC = () => {
                     onOutlineUpdate={(updatedOutline) => setOutlineV2(updatedOutline)}
                     onStartWritingV3={() => {
                       setWritingMode("v3");
+                      setWriterResumeMode(false);
                       setShowArticleWriter(true);
                     }}
                     availableMaterials={availableMaterials}
@@ -2051,6 +2056,7 @@ const App: React.FC = () => {
                 onEditClick={() => {
                   // 編集を再開するためArticleWriterを開く
                   if (outline || outlineV2) {
+                    setWriterResumeMode(true);
                     setShowArticleWriter(true);
                   }
                 }}
@@ -2099,7 +2105,8 @@ const App: React.FC = () => {
             testMode={false} // テストモード強制無効化
             revisionTestMode={false} // 修正サービステストモード無効化
             isAutoMode={autoArticleWriter} // フル自動モードフラグ
-            skipAutoGenerate={showArticleWriter && generatedArticle !== null} // 編集再開時は自動生成をスキップ
+            skipAutoGenerate={writerResumeMode && generatedArticle !== null} // 編集再開時のみ自動生成をスキップ（新規執筆時は前回記事が残っていても実行する）
+            initialArticle={writerResumeMode ? generatedArticle : null}
             referenceMaterialContext={refMaterialContext || undefined}
             sectionReferenceMaterials={
               outlineV2 ? (function() {
@@ -2128,6 +2135,7 @@ const App: React.FC = () => {
               setShowArticleWriter(false);
               setShowWriterDirectly(false);
               setAutoArticleWriter(false);
+              setWriterResumeMode(false);
             }}
             onArticleGenerated={(article) => {
               setGeneratedArticle(article);
