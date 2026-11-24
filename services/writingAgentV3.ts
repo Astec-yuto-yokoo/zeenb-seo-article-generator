@@ -16,6 +16,7 @@ import type { ImageAsset } from "./boxImageService";
 import { buildImageContext } from "./contextBuilder";
 import { buildProductRecommendationText } from "./productRecommendationConfig";
 import { numberArticleHeadings } from "../utils/headingNumberer";
+import { wrapAnnotationsInSmall } from "../utils/annotationFormatter";
 // latestAIModelsは汎用化のため削除
 
 const API_KEY =
@@ -1102,7 +1103,8 @@ ${
       // H2/H3 に番号付与（H2: "1. ", H3: "1-1. "）— 冪等
       const numberedText = numberArticleHeadings(formattedText);
 
-      return numberedText;
+      // 注釈・出典の段落を <small> で小さい文字サイズにする — 冪等
+      return wrapAnnotationsInSmall(numberedText);
     } catch (error) {
       clearInterval(progressInterval);
       throw error;

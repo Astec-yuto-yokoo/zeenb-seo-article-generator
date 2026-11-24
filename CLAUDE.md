@@ -191,6 +191,12 @@ Gemini APIキーをブラウザに露出させない。実キーは**サーバ�
 - **データ層（`OutlineSectionV2.heading` 等）には番号を入れない**。表示は `buildOutlineLabels()` で計算
 - 参考フォーマット: https://zeenb.astecpaints.jp/journal/color/painting-color-48427
 
+## 注釈表記の文字サイズ（zeenb）
+
+- 注釈・出典の段落（「※」始まり / 「（出典：」始まり / `class="source-citation"`）は `<small>` で囲み、本文より小さく表示する
+- 処理は `utils/annotationFormatter.ts` の `wrapAnnotationsInSmall()`（冪等）。呼び出し箇所は見出し番号付与と同じ（`writingAgentV3.ts` 出力直前 / `sectionBasedArticleWriter.ts` 結合直後 / `ArticleWriter.tsx` の `cleanupArticleContent()` と H2修正後 / `articleRevisionService.ts` のH2修正後）
+- 文中に混ざる「※」は対象外（段落の先頭のみ判定）
+
 ## 構成 Ver.2 ルール（絶対厳守）
 
 - タイトル: **29〜35文字**（32文字前後が理想）、自社サービス名・【】記号を含めない

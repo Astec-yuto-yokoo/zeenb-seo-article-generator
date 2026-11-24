@@ -8,6 +8,7 @@ import {
 import { slackNotifier } from "./slackNotificationService";
 import { curriculumDataService } from "./curriculumDataService";
 import { numberArticleHeadings } from "../utils/headingNumberer";
+import { wrapAnnotationsInSmall } from "../utils/annotationFormatter";
 // latestAIModelsは汎用化のため削除
 
 // Gemini APIクライアントの初期化
@@ -1748,8 +1749,8 @@ ${userPrompt}
       .replace(/<\/b>/gi, "</strong>");
 
     // セクションを結合して全体に番号を振り直す（H2追加・削除に対応）
-    const revisedFull = numberArticleHeadings(
-      beforeSection + revisedSection + afterSection
+    const revisedFull = wrapAnnotationsInSmall(
+      numberArticleHeadings(beforeSection + revisedSection + afterSection)
     );
     console.log(`✅ 記事H2セクション修正完了: 「${h2Heading}」`);
     return revisedFull;

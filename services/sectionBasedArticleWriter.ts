@@ -8,6 +8,7 @@ import { proofreadArticle, autoFixArticle, autoFixArticleBySection } from './pro
 import { checkFactsForSection, type FactInfo } from './factCheckService';
 import { getCompanyInfo, generateCompanyContext } from './companyService';
 import { numberArticleHeadings } from '../utils/headingNumberer';
+import { wrapAnnotationsInSmall } from '../utils/annotationFormatter';
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
 if (!apiKey) {
@@ -672,7 +673,8 @@ export async function generateArticleBySection(
 
   // H2/H3 に番号付与（H2: "1. ", H3: "1-1. "）— 冪等
   htmlContent = numberArticleHeadings(htmlContent);
-  
+  htmlContent = wrapAnnotationsInSmall(htmlContent);
+
   // 5. タイトルとメタディスクリプションを生成
   const title = `【2025年最新】${keyword}完全ガイド｜${allSections[0].heading}から${allSections[allSections.length - 1].heading}まで徹底解説`;
   const metaDescription = `${keyword}について、${allSections.map(s => s.heading).slice(0, 3).join('、')}など、初心者にもわかりやすく解説。2025年最新情報を網羅した完全ガイドです。`;

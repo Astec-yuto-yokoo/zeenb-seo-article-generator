@@ -34,6 +34,7 @@ import LoadingSpinner from "./LoadingSpinner";
 import { slackNotifier } from "../services/slackNotificationService";
 import { extractCautionNotes } from "../utils/extractCautionNotes";
 import { numberArticleHeadings, buildOutlineLabels } from "../utils/headingNumberer";
+import { wrapAnnotationsInSmall } from "../utils/annotationFormatter";
 import { generateSlug } from "../services/slugGenerator";
 
 /**
@@ -95,6 +96,9 @@ function cleanupArticleContent(content: string): string {
 
   // H2/H3 見出しに番号付与（H2: "1. ", H3: "1-1. "）— 冪等
   cleaned = numberArticleHeadings(cleaned);
+
+  // 注釈・出典の段落を <small> で小さい文字サイズにする — 冪等
+  cleaned = wrapAnnotationsInSmall(cleaned);
 
   // 変更内容をログ出力
   const asteriskCount = (content.match(/\*/g) || []).length;
@@ -250,6 +254,7 @@ const ArticleWriter: React.FC<ArticleWriterProps> = ({
       const { fixWordPressListBlocks } = await import('../services/writingAgentV3');
       let cleaned = fixWordPressListBlocks(revisedHtml);
       cleaned = fixWordPressTableBlocks(cleaned);
+      cleaned = wrapAnnotationsInSmall(cleaned);
 
       setEditedContent(cleaned);
       if (article) {

@@ -267,6 +267,7 @@ ${article.plainText}`;
     .source-citation { font-size: 0.85em; color: #666; margin-top: 4px; margin-bottom: 16px; }
     .source-citation a { color: #2563eb; text-decoration: underline; }
     .source-citation a:hover { color: #1d4ed8; }
+    .source-citation small { font-size: inherit; }
   </style>
   ${faqJsonLd}
 </head>
@@ -627,6 +628,7 @@ ${article.plainText}`;
               .article-content .source-citation { font-size: 0.85em; color: #6b7280; margin-top: 4px; margin-bottom: 16px; }
               .article-content .source-citation a { color: #2563eb; text-decoration: underline; }
               .article-content .source-citation a:hover { color: #1d4ed8; }
+              .article-content .source-citation small { font-size: inherit; }
             `}} />
             <h1 className="text-3xl font-bold mb-6 pb-4 border-b-2 border-blue-600">
               {article.title}
