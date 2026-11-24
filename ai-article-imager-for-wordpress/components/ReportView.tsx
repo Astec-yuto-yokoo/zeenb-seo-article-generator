@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { ReportLog, PostConfig, WPConfig, H2Section } from "../types";
+import { ReportLog, PostConfig, WPConfig, H2Section, MetaDescriptionResult } from "../types";
 import { uploadImage, createPost } from "../services/wordpressService";
 import { slackService } from "../services/slackService";
 
@@ -21,6 +21,8 @@ interface PostResult {
   success: boolean;
   message: string;
   link?: string;
+  metaDescription?: MetaDescriptionResult;
+  focusKeyphrase?: MetaDescriptionResult;
 }
 
 export const ReportView: React.FC<ReportViewProps> = ({
@@ -335,15 +337,26 @@ export const ReportView: React.FC<ReportViewProps> = ({
     setProgressMessage("Creating WordPress post...");
 
     try {
-      const { link } = await createPost(
+      const {
+        link,
+        metaDescription: metaDescriptionResult,
+        focusKeyphrase: focusKeyphraseResult,
+      } = await createPost(
         wpConfig,
-        { ...postConfig, slug: metaData?.slug },
+        {
+          ...postConfig,
+          slug: metaData ? metaData.slug : undefined,
+          metaDescription: metaData ? metaData.metaDescription : undefined,
+          focusKeyword: metaData ? metaData.keyword : undefined,
+        },
         finalHtml
       );
       setPostResult({
         success: true,
         message: "Post created successfully!",
         link,
+        metaDescription: metaDescriptionResult,
+        focusKeyphrase: focusKeyphraseResult,
       });
 
       // WordPress投稿完了をSlackに通知（設定されたユーザー宛メンション付き）
@@ -663,6 +676,36 @@ export const ReportView: React.FC<ReportViewProps> = ({
                 {postResult.success ? "Success!" : "Error"}
               </h4>
               <p>{postResult.message}</p>
+              {postResult.metaDescription && (
+                <p
+                  className={`mt-1 text-sm ${
+                    postResult.metaDescription.applied
+                      ? "text-green-700"
+                      : "text-yellow-800"
+                  }`}
+                >
+                  {postResult.metaDescription.applied ? "✅ " : "⚠️ "}
+                  {postResult.metaDescription.message}
+                </p>
+              )}
+              {postResult.focusKeyphrase && (
+                <p
+                  className={`mt-1 text-sm ${
+                    postResult.focusKeyphrase.applied
+                      ? "text-green-700"
+                      : postResult.focusKeyphrase.skipped
+                      ? "text-gray-600"
+                      : "text-yellow-800"
+                  }`}
+                >
+                  {postResult.focusKeyphrase.applied
+                    ? "✅ "
+                    : postResult.focusKeyphrase.skipped
+                    ? "ℹ️ "
+                    : "⚠️ "}
+                  {postResult.focusKeyphrase.message}
+                </p>
+              )}
               {postResult.link && (
                 <a
                   href={postResult.link}

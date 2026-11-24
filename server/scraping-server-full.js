@@ -8,6 +8,7 @@ const rateLimit = require("express-rate-limit");
 const puppeteer = require("puppeteer");
 const fetch = require("node-fetch");
 const { appendFaqSchema } = require("./api/faq-schema");
+const { applyMetaDescription, applyFocusKeyphrase } = require("./api/wp-meta-description");
 const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
@@ -782,7 +783,7 @@ app.post("/api/wordpress/upload-image", async (req, res) => {
 
 // WordPress プロキシエンドポイント（記事作成）
 app.post("/api/wordpress/create-post", async (req, res) => {
-  const { title, content, status, slug } = req.body;
+  const { title, content, status, slug, metaDescription, focusKeyword } = req.body;
 
   if (!title || !content) {
     return res.status(400).json({ error: "title and content are required" });
@@ -846,7 +847,45 @@ app.post("/api/wordpress/create-post", async (req, res) => {
 
     const data = await response.json();
     console.log("✅ WordPress記事作成成功:", data.id);
-    res.json({ link: data.link, id: data.id });
+
+    // description（メタディスクリプション）を SEO プラグイン側に設定（失敗しても記事作成は成功扱い）
+    const metaDescriptionResult = await applyMetaDescription({
+      mode: process.env.WP_META_DESCRIPTION_MODE || "aioseo",
+      fetch,
+      wpBaseUrl: wpBaseUrl.replace(/\/+$/, ""),
+      restBase: "posts",
+      authHeader,
+      wpUsername,
+      wpAppPassword,
+      postId: data.id,
+      description: metaDescription,
+    });
+    console.log(
+      (metaDescriptionResult.applied ? "✅ " : "⚠️ ") + metaDescriptionResult.message
+    );
+
+    // フォーカスキーフレーズ（対策キーワード）も同じ保存先へ設定（失敗しても記事作成は成功扱い）
+    const focusKeyphraseResult = await applyFocusKeyphrase({
+      mode: process.env.WP_META_DESCRIPTION_MODE || "aioseo",
+      fetch,
+      wpBaseUrl: wpBaseUrl.replace(/\/+$/, ""),
+      restBase: "posts",
+      authHeader,
+      wpUsername,
+      wpAppPassword,
+      postId: data.id,
+      keyphrase: focusKeyword,
+    });
+    console.log(
+      (focusKeyphraseResult.applied ? "✅ " : focusKeyphraseResult.skipped ? "ℹ️ " : "⚠️ ") + focusKeyphraseResult.message
+    );
+
+    res.json({
+      link: data.link,
+      id: data.id,
+      metaDescription: metaDescriptionResult,
+      focusKeyphrase: focusKeyphraseResult,
+    });
   } catch (error) {
     console.error("❌ WordPress記事作成エラー:", error.message);
     res.status(500).json({

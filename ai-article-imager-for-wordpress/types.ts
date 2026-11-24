@@ -9,6 +9,16 @@ export interface PostConfig {
   title: string;
   status: 'draft' | 'publish';
   slug?: string;
+  metaDescription?: string;
+  focusKeyword?: string;
+}
+
+// WordPress入稿時の description / フォーカスキーフレーズ設定結果（サーバーの wp-meta-description.js が返す）
+export interface MetaDescriptionResult {
+  applied: boolean;
+  skipped?: boolean; // サイトに保存先がない等で設定しなかった
+  mode: string;
+  message: string;
 }
 
 export interface H2Section {

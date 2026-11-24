@@ -325,6 +325,20 @@ BOXに保存された画像を記事生成時にAIが自動選択・挿入する
 - 両関数とも冪等性あり（既にブロック構造の場合も正しく処理）
 - クリーンアップ処理（`cleanupArticleContent`）内で順に呼び出される
 
+## description（メタディスクリプション）自動設定（WordPress自動入稿時）
+
+- `POST /api/wordpress/create-post` が記事作成後、`server/api/wp-meta-description.js` の `applyMetaDescription()` で生成済みの `metaDescription` を SEO 設定欄に書き込む（画像エージェントの `ReportView.tsx` → `wordpressService.createPost()` が送信）
+- サイトごとに保存先が異なるため `WP_META_DESCRIPTION_MODE` で切替（未設定時の既定はサイト別）:
+  - zeenb = `aioseo`（AIOSEO の `aioseo/v1/posts-list/update-details-column` に `{postId, description}`。タイトル設定は送らない）
+  - apaman = `yoast`（REST の `meta._yoast_wpseo_metadesc`。Yoast はこのキーを REST 非公開で登録するため、**WordPress側で `register_post_meta` による REST 公開が必要**。未公開だと WP は meta を黙って無視するので応答で反映を確認する）
+  - factory = `emanon`（Emanon Pro テーマの独自フィールド `emanon_meta_description` を XML-RPC `wp.editPost` の custom_fields で更新）
+- 設定に失敗しても記事作成は成功扱い。結果（applied / message）はレスポンスの `metaDescription` で返し、画像エージェントの投稿結果欄に表示する
+- **フォーカスキーフレーズ**も同じモジュールの `applyFocusKeyphrase()` で設定する（値は本体から渡る `metaData.keyword`。画像エージェントが `focusKeyword` として送信）。結果はレスポンスの `focusKeyphrase`（`skipped` 付き）
+  - zeenb = AIOSEO の `aioseo/v1/keyphrases` に `{postId, keyphrases:{focus:{keyphrase}, additional:[]}}`（description は保持される）
+  - apaman = REST の `meta._yoast_wpseo_focuskw`（description と同様に `register_post_meta` による REST 公開が必要）
+  - factory = Emanon Pro のメタキーワード欄（独自フィールド `emanon_meta_keywords`）を description と同じく XML-RPC `wp.editPost` で更新
+- 3プロジェクト共通反映対象（apaman / zeenb / factory）。モジュールは3プロジェクトで同一内容を保つこと
+
 ## FAQPage 構造化データ（WordPress自動入稿時に付与）
 
 - `POST /api/wordpress/create-post`（`scraping-server.js` / `scraping-server-full.js`）が送信直前に `server/api/faq-schema.js` の `appendFaqSchema()` を通し、FAQ/よくある質問H2配下のH3＋回答から FAQPage JSON-LD を `<!-- wp:html -->` ブロックで本文末尾に追加する

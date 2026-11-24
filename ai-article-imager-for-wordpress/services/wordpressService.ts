@@ -1,5 +1,5 @@
 
-import { WPConfig, PostConfig, H2Section } from '../types';
+import { WPConfig, PostConfig, H2Section, MetaDescriptionResult } from '../types';
 
 // サーバーのAPIエンドポイント（環境変数から取得、デフォルトはローカル）
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3003/api';
@@ -46,7 +46,7 @@ export const createPost = async (
     wpConfig: WPConfig,
     postConfig: PostConfig,
     content: string
-): Promise<{ link: string, id: number }> => {
+): Promise<{ link: string, id: number, metaDescription?: MetaDescriptionResult, focusKeyphrase?: MetaDescriptionResult }> => {
     const postData: any = {
         title: postConfig.title,
         content,
@@ -56,6 +56,16 @@ export const createPost = async (
     // slugが指定されている場合は追加
     if (postConfig.slug) {
         postData.slug = postConfig.slug;
+    }
+
+    // description（メタディスクリプション）はサーバー側でSEOプラグインに設定される
+    if (postConfig.metaDescription) {
+        postData.metaDescription = postConfig.metaDescription;
+    }
+
+    // フォーカスキーフレーズ（対策キーワード）も同様にサーバー側でSEOプラグインに設定される
+    if (postConfig.focusKeyword) {
+        postData.focusKeyword = postConfig.focusKeyword;
     }
 
     const response = await fetch(`${API_BASE_URL}/wordpress/create-post`, {
@@ -73,5 +83,5 @@ export const createPost = async (
     }
 
     const data = await response.json();
-    return { link: data.link, id: data.id };
+    return { link: data.link, id: data.id, metaDescription: data.metaDescription, focusKeyphrase: data.focusKeyphrase };
 };
